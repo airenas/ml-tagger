@@ -1,2 +1,4 @@
 # ml-tagger
-ML based pos tagger service (Rust->FastText->Onnx)
+
+ML based pos tagger service (Rust->FastText->ONNX)
+
