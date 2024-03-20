@@ -13,6 +13,8 @@ tokio-util = "0.7.10"
 warp = "0.3.6"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_derive = "1.0.197"
+fasttext = "0.7.8"
+anyhow = "1.0.81"
 
 [dev-dependencies]
 approx = "0.5.1"

@@ -1,8 +1,9 @@
 mod config;
 
 use clap::Arg;
-use ml_tagger::handlers::data::Service;
+use ml_tagger::handlers::data::{self, Service, TagParams};
 use ml_tagger::handlers::{self, errors};
+use ml_tagger::processors;
 use std::process;
 use std::{error::Error, sync::Arc};
 use tokio::sync::RwLock;
@@ -43,19 +44,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         log::debug!("expected drop tx_close");
     });
 
-    // let pool = deadpool_redis::Config::from_url(&cfg.redis_url)
-    //     .create_pool(Some(Runtime::Tokio1))
-    //     .unwrap_or_else(|err| {
-    //         log::error!("redis poll init: {err}");
-    //         process::exit(1)
-    //     });
+    let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings)?;
+    let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
 
-    // let db = RedisClient::new(pool).await.unwrap_or_else(|err| {
-    //     log::error!("redis client init: {err}");
-    //     process::exit(1)
-    // });
-
-    let srv = Arc::new(RwLock::new(Service {}));
+    let srv = Arc::new(RwLock::new(Service {
+        calls: 0,
+        embedder: boxed_embedder,
+    }));
 
     let live_route = warp::get()
         .and(warp::path("live"))
@@ -63,6 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .and_then(handlers::live::handler);
     let tag_route = warp::post()
         .and(warp::path("tag"))
+        .and(warp::query::<TagParams>())
         .and(json_body())
         .and(with_service(srv.clone()))
         .and_then(handlers::tag::handler);
@@ -78,7 +74,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ct.cancelled().await;
         });
 
-    log::info!("wait for server to finish");
+    log::info!("Serving. waiting for server to finish");
     tokio::task::spawn(server).await.unwrap_or_else(|err| {
         log::error!("{err}");
         process::exit(1);
@@ -113,6 +109,14 @@ fn app_config() -> Result<Config, String> {
                 .help("Service port")
                 .env("PORT")
                 .default_value("8000"),
+        )
+        .arg(
+            Arg::new("embeddings")
+                .long("embeddings")
+                .value_name("EMBEDDINGS_FILE")
+                .env("EMBEDDINGS_FILE")
+                .help("Embeddings file")
+                .required(true),
         )
         .get_matches();
     let mut config = Config::build(&cmd)?;

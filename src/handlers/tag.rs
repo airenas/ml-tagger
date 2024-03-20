@@ -1,43 +1,38 @@
 use std::sync::Arc;
 
-use crate::handlers::data::{Result, Service, Word};
+use crate::handlers::{
+    data::{Result, Service, Word, WorkContext, WorkWord},
+    errors::OtherError,
+};
 use tokio::sync::RwLock;
 use warp::reply::Reply;
 
-pub struct WorkWord {
-    pub w: String,
-    pub mi: Option<String>,
-    pub lemma: Option<String>,
-    pub w_type: Option<String>,
-}
+use super::data::TagParams;
 
 pub async fn handler(
+    params: TagParams,
     input: Vec<Vec<String>>,
     srv_wrap: Arc<RwLock<Service>>,
 ) -> Result<impl Reply> {
     log::debug!("tag handler");
-    let mut workData = Vec::<Vec<WorkWord>>::new();
+    let mut ctx = WorkContext::new(params);
     let mut cw = 0;
     for sentence in input {
         let mut work_sentence = Vec::<WorkWord>::new();
-        for word in sentence {
-            work_sentence.push(WorkWord {
-                w: word,
-                mi: None,
-                lemma: None,
-                w_type: None,
-            });
+        for w in sentence {
+            work_sentence.push(WorkWord::new(w));
             cw += 1;
         }
-        workData.push(work_sentence);
+        ctx.sentences.push(work_sentence);
     }
-    log::debug!("got {} sent, {} words", workData.len(), cw);
+    log::debug!("got {} sent, {} words", ctx.sentences.len(), cw);
     let srv = srv_wrap.read().await;
-
-    
+    srv.embedder
+        .process(&mut ctx)
+        .map_err(|e| OtherError { msg: e.to_string() })?;
 
     let mut res = Vec::<Vec<Word>>::new();
-    for sentence in workData {
+    for sentence in ctx.sentences {
         let mut res_sentence = Vec::<Word>::new();
         for word in sentence {
             res_sentence.push(Word {
@@ -45,6 +40,10 @@ pub async fn handler(
                 mi: String::from(""),
                 lemma: String::from(""),
                 w_type: String::from(""),
+                embeddings: match ctx.params.debug {
+                    Some(true) => word.embeddings,
+                    _ => None,
+                },
             });
             cw += 1;
         }
