@@ -46,10 +46,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings)?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
+    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx)?;
+    let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
     let srv = Arc::new(RwLock::new(Service {
         calls: 0,
         embedder: boxed_embedder,
+        onnx: boxed_onnx,
     }));
 
     let live_route = warp::get()
@@ -116,6 +119,14 @@ fn app_config() -> Result<Config, String> {
                 .value_name("EMBEDDINGS_FILE")
                 .env("EMBEDDINGS_FILE")
                 .help("Embeddings file")
+                .required(true),
+        )
+        .arg(
+            Arg::new("onnx")
+                .long("onnx")
+                .value_name("ONNX_FILE")
+                .env("ONNX_FILE")
+                .help("Onnx file")
                 .required(true),
         )
         .get_matches();

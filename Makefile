@@ -1,7 +1,7 @@
 -include Makefile.options
 ###############################################################################
 run:
-	RUST_LOG=DEBUG cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE}
+	RUST_LOG=DEBUG cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE}
 .PHONY: run
 ###############################################################################
 run/build: build/local

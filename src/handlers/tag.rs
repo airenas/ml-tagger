@@ -30,6 +30,9 @@ pub async fn handler(
     srv.embedder
         .process(&mut ctx)
         .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.onnx
+        .process(&mut ctx)
+        .map_err(|e| OtherError { msg: e.to_string() })?;
 
     let mut res = Vec::<Vec<Word>>::new();
     for sentence in ctx.sentences {
@@ -42,6 +45,10 @@ pub async fn handler(
                 w_type: String::from(""),
                 embeddings: match ctx.params.debug {
                     Some(true) => word.embeddings,
+                    _ => None,
+                },
+                predicted: match ctx.params.debug {
+                    Some(true) => word.predicted,
                     _ => None,
                 },
             });
