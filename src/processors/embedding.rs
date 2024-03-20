@@ -13,9 +13,9 @@ impl FastTextWrapper {
     pub fn new(file: &str) -> anyhow::Result<FastTextWrapper> {
         let before = Instant::now();
         let mut model = FastText::new();
-        log::debug!("Loading FastText from {}", file);
+        log::info!("Loading FastText from {}", file);
         model.load_model(file).map_err(anyhow::Error::msg)?;
-        log::debug!(
+        log::info!(
             "Loaded FastText dim {} in {:.2?}",
             model.get_dimension(),
             before.elapsed()
@@ -37,7 +37,7 @@ impl Processor for FastTextWrapper {
                 word_info.embeddings = Some(embedding);
             }
         }
-        log::debug!("Done embedding in {:.2?}", before.elapsed());
+        log::info!("Done embedding in {:.2?}", before.elapsed());
         Ok(())
     }
 }
