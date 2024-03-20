@@ -1,4 +1,5 @@
-use std::time::Instant;
+use std::io::Read;
+use std::{fs::File, time::Instant};
 
 use anyhow::Ok;
 use onnxruntime_ng::{
@@ -9,20 +10,25 @@ use crate::handlers::data::{Processor, WorkContext};
 
 pub struct OnnxWrapper {
     environment: Environment,
-    file: String,
-    // session: Option<Arc<Session<'a>>>,
+    model_bytes: Vec<u8>,
 }
 
 impl OnnxWrapper {
-    pub fn new(file: &str) -> anyhow::Result<OnnxWrapper> {
-        // let before = Instant::now();
+    pub fn new(file_str: &str) -> anyhow::Result<OnnxWrapper> {
+        let before = Instant::now();
         let environment = Environment::builder()
             .with_name("onnx")
             .with_log_level(LoggingLevel::Verbose)
             .build()?;
+        log::info!("Loading ONNX model from {}", file_str);
+        let mut file = File::open(file_str)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        log::info!("onnx loaded in {:.2?}", before.elapsed());
+
         let res = OnnxWrapper {
             environment,
-            file: file.to_string(),
+            model_bytes: buffer,
         };
         Ok(res)
     }
@@ -31,13 +37,13 @@ impl OnnxWrapper {
 impl Processor for OnnxWrapper {
     fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let before = Instant::now();
-        log::debug!("Loading ONNX model from {}", self.file);
+        log::debug!("Loading ONNX model from memory");
         let mut session = self
             .environment
             .new_session_builder()?
-            .with_optimization_level(GraphOptimizationLevel::Basic)?
-            .with_number_threads(4)?
-            .with_model_from_file(self.file.as_str())?;
+            .with_optimization_level(GraphOptimizationLevel::DisableAll)?
+            .with_number_threads(1)?
+            .with_model_from_memory(self.model_bytes.clone())?;
         log::debug!("onnx loaded in {:.2?}", before.elapsed());
 
         let before = Instant::now();
@@ -68,7 +74,7 @@ impl Processor for OnnxWrapper {
             }
         }
 
-        log::debug!("Done onnx in {:.2?}", before.elapsed());
+        log::info!("Done onnx in {:.2?}", before.elapsed());
         Ok(())
     }
 }
