@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use crate::handlers::{
-    data::{Result, Service, Word, WorkContext, WorkWord},
-    errors::OtherError,
+use crate::{
+    handlers::{
+        data::{Result, Service, Word, WorkContext, WorkWord},
+        errors::OtherError,
+    },
+    utils::PerfLogger,
 };
 use tokio::sync::RwLock;
 use warp::reply::Reply;
@@ -14,7 +17,7 @@ pub async fn handler(
     input: Vec<Vec<String>>,
     srv_wrap: Arc<RwLock<Service>>,
 ) -> Result<impl Reply> {
-    log::debug!("tag handler");
+    let _perf_log = PerfLogger::new("tag handler");
     let mut ctx = WorkContext::new(params);
     let mut cw = 0;
     for sentence in input {
@@ -33,6 +36,9 @@ pub async fn handler(
     srv.onnx
         .process(&mut ctx)
         .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.tag_mapper
+        .process(&mut ctx)
+        .map_err(|e| OtherError { msg: e.to_string() })?;
 
     let mut res = Vec::<Vec<Word>>::new();
     for sentence in ctx.sentences {
@@ -40,9 +46,9 @@ pub async fn handler(
         for word in sentence {
             res_sentence.push(Word {
                 w: word.w,
-                mi: String::from(""),
-                lemma: String::from(""),
-                w_type: String::from(""),
+                mi: None,
+                lemma: None,
+                w_type: None,
                 embeddings: match ctx.params.debug {
                     Some(true) => word.embeddings,
                     _ => None,
@@ -51,10 +57,15 @@ pub async fn handler(
                     Some(true) => word.predicted,
                     _ => None,
                 },
+                predicted_str: match ctx.params.debug {
+                    Some(true) => word.predicted_str,
+                    _ => None,
+                },
             });
             cw += 1;
         }
         res.push(res_sentence);
     }
+
     Ok(warp::reply::json(&res).into_response())
 }

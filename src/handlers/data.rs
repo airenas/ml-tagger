@@ -14,6 +14,7 @@ pub struct WorkWord {
     pub w_type: Option<String>,
     pub embeddings: Option<Vec<f32>>,
     pub predicted: Option<i32>,
+    pub predicted_str: Option<String>,
 }
 
 pub trait Processor {
@@ -23,6 +24,7 @@ pub trait Processor {
 pub struct Service {
     pub embedder: Box<dyn Processor + Send + Sync>,
     pub onnx: Box<dyn Processor + Send + Sync>,
+    pub tag_mapper: Box<dyn Processor + Send + Sync>,
     pub calls: u32,
 }
 
@@ -41,16 +43,18 @@ pub struct TagParams {
 #[derive(Debug, Serialize)]
 pub struct Word {
     pub w: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub mi: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub lemma: String,
-    #[serde(rename = "type")]
-    pub w_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mi: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lemma: Option<String>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub w_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embeddings: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub predicted: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicted_str: Option<String>,
 }
 
 impl WorkContext {
@@ -72,6 +76,7 @@ impl WorkWord {
             w_type: None,
             embeddings: None,
             predicted: None,
+            predicted_str: None,
         }
     }
 }

@@ -1,9 +1,10 @@
-use std::time::Instant;
-
 use anyhow::Ok;
 use fasttext::FastText;
 
-use crate::handlers::data::{Processor, WorkContext};
+use crate::{
+    handlers::data::{Processor, WorkContext},
+    utils::PerfLogger,
+};
 
 pub struct FastTextWrapper {
     model: FastText,
@@ -11,15 +12,11 @@ pub struct FastTextWrapper {
 
 impl FastTextWrapper {
     pub fn new(file: &str) -> anyhow::Result<FastTextWrapper> {
-        let before = Instant::now();
+        let _perf_log = PerfLogger::new("fast text loader");
         let mut model = FastText::new();
         log::info!("Loading FastText from {}", file);
         model.load_model(file).map_err(anyhow::Error::msg)?;
-        log::info!(
-            "Loaded FastText dim {} in {:.2?}",
-            model.get_dimension(),
-            before.elapsed()
-        );
+        log::info!("Loaded FastText dim {}", model.get_dimension(),);
         let res = FastTextWrapper { model };
         Ok(res)
     }
@@ -27,7 +24,7 @@ impl FastTextWrapper {
 
 impl Processor for FastTextWrapper {
     fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
-        let before = Instant::now();
+        let _perf_log = PerfLogger::new("fast text embeddigs");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 let embedding = self
@@ -37,7 +34,6 @@ impl Processor for FastTextWrapper {
                 word_info.embeddings = Some(embedding);
             }
         }
-        log::info!("Done embedding in {:.2?}", before.elapsed());
         Ok(())
     }
 }

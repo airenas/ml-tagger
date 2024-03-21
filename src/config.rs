@@ -5,6 +5,7 @@ pub struct Config {
     pub version: String,
     pub embeddings: String,
     pub onnx: String,
+    pub tags: String,
 }
 
 impl Config {
@@ -24,11 +25,16 @@ impl Config {
             Some(v) => Ok(v),
             None => Err("no onnx file"),
         }?;
+        let tags_file = match args.get_one::<String>("tags") {
+            Some(v) => Ok(v),
+            None => Err("no tags file"),
+        }?;
         Ok(Config {
             port,
             version: "dev".to_string(),
             embeddings: embeddings_file.to_string(),
             onnx: onnx_file.to_string(),
+            tags: tags_file.to_string(),
         })
     }
 }

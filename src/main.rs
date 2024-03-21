@@ -4,6 +4,7 @@ use clap::Arg;
 use ml_tagger::handlers::data::{self, Service, TagParams};
 use ml_tagger::handlers::{self, errors};
 use ml_tagger::processors;
+use ml_tagger::utils::PerfLogger;
 use std::process;
 use std::{error::Error, sync::Arc};
 use tokio::sync::RwLock;
@@ -16,6 +17,7 @@ use tokio::signal::unix::{signal, SignalKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let _perf_log = PerfLogger::new("loading service");
     env_logger::init();
 
     let cfg = app_config().unwrap_or_else(|err| {
@@ -46,13 +48,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings)?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
+
     let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx)?;
     let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
+
+    let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
+    let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
 
     let srv = Arc::new(RwLock::new(Service {
         calls: 0,
         embedder: boxed_embedder,
         onnx: boxed_onnx,
+        tag_mapper: boxed_tags,
     }));
 
     let live_route = warp::get()
@@ -77,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ct.cancelled().await;
         });
 
+    std::mem::drop(_perf_log);
     log::info!("Serving. waiting for server to finish");
     tokio::task::spawn(server).await.unwrap_or_else(|err| {
         log::error!("{err}");
@@ -127,6 +135,14 @@ fn app_config() -> Result<Config, String> {
                 .value_name("ONNX_FILE")
                 .env("ONNX_FILE")
                 .help("Onnx file")
+                .required(true),
+        )
+        .arg(
+            Arg::new("tags")
+                .long("tags")
+                .value_name("TAGS_FILE")
+                .env("TAGS_FILE")
+                .help("Tags file")
                 .required(true),
         )
         .get_matches();

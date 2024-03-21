@@ -1,12 +1,13 @@
+use std::env;
+use std::fs::File;
 use std::io::Read;
-use std::{fs::File, time::Instant};
 
-use anyhow::Ok;
 use onnxruntime_ng::{
     environment::Environment, ndarray, tensor::OrtOwnedTensor, GraphOptimizationLevel, LoggingLevel,
 };
 
 use crate::handlers::data::{Processor, WorkContext};
+use crate::utils::PerfLogger;
 
 pub struct OnnxWrapper {
     environment: Environment,
@@ -15,7 +16,11 @@ pub struct OnnxWrapper {
 
 impl OnnxWrapper {
     pub fn new(file_str: &str) -> anyhow::Result<OnnxWrapper> {
-        let before = Instant::now();
+        match env::var("LD_LIBRARY_PATH") {
+            Ok(value) => log::info!("LD_LIBRARY_PATH: {}", value),
+            Err(_) => log::warn!("LD_LIBRARY_PATH env var not found"),
+        };
+        let _perf_log = PerfLogger::new("onnx loader");
         let environment = Environment::builder()
             .with_name("onnx")
             .with_log_level(LoggingLevel::Verbose)
@@ -24,7 +29,6 @@ impl OnnxWrapper {
         let mut file = File::open(file_str)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
-        log::info!("onnx loaded in {:.2?}", before.elapsed());
 
         let res = OnnxWrapper {
             environment,
@@ -36,17 +40,17 @@ impl OnnxWrapper {
 
 impl Processor for OnnxWrapper {
     fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
-        let before = Instant::now();
-        log::debug!("Loading ONNX model from memory");
+        let _perf_log = PerfLogger::new("onnx");
+        let _inner_perf_log = PerfLogger::new("onnx load from mem");
         let mut session = self
             .environment
             .new_session_builder()?
             .with_optimization_level(GraphOptimizationLevel::DisableAll)?
             .with_number_threads(1)?
             .with_model_from_memory(self.model_bytes.clone())?;
-        log::debug!("onnx loaded in {:.2?}", before.elapsed());
 
-        let before = Instant::now();
+        std::mem::drop(_inner_perf_log);
+        let _inner_perf_log = PerfLogger::new("onnx run");
         for sent in ctx.sentences.iter_mut() {
             let mut combined_data: Vec<f32> = Vec::new();
             let mut cw = 0;
@@ -73,8 +77,6 @@ impl Processor for OnnxWrapper {
                 word_info.predicted = Some(output_values[i])
             }
         }
-
-        log::info!("Done onnx in {:.2?}", before.elapsed());
         Ok(())
     }
 }
