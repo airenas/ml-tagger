@@ -16,6 +16,8 @@ serde_derive = "1.0.197"
 anyhow = "1.0.81"
 fasttext = "0.7.8"
 onnxruntime-ng = { version = "1.16.1" }
+reqwest = { version = "0.12", features = ["json"] }
+async-trait = "0.1.79"
 
 [dev-dependencies]
 approx = "0.5.1"

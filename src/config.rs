@@ -6,6 +6,7 @@ pub struct Config {
     pub embeddings: String,
     pub onnx: String,
     pub tags: String,
+    pub lemma_url: String,
 }
 
 impl Config {
@@ -35,6 +36,7 @@ impl Config {
             embeddings: embeddings_file.to_string(),
             onnx: onnx_file.to_string(),
             tags: tags_file.to_string(),
+            lemma_url: "http://klcdocker.vdu.lt/morfdemo/api.lema/analyze".to_string()
         })
     }
 }

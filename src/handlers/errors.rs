@@ -26,20 +26,23 @@ pub async fn handle_rejection(err: Rejection) -> std::result::Result<impl Reply,
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
         message = "Not Found";
-    } else if err.find::<warp::filters::body::BodyDeserializeError>().is_some() {
+    } else if err
+        .find::<warp::filters::body::BodyDeserializeError>()
+        .is_some()
+    {
         code = StatusCode::BAD_REQUEST;
         message = "Invalid Body";
     } else if let Some(e) = err.find::<ParamError>() {
         log::debug!("{}", e.msg);
         code = StatusCode::BAD_REQUEST;
         message = e.msg.as_str();
-    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
-        code = StatusCode::METHOD_NOT_ALLOWED;
-        message = "Method Not Allowed";
     } else if let Some(e) = err.find::<OtherError>() {
         log::error!("{}", e.msg);
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "Internal Server Error";
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        code = StatusCode::METHOD_NOT_ALLOWED;
+        message = "Method Not Allowed";
     } else {
         log::error!("unhandled error: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;

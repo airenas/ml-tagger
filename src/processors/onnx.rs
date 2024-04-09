@@ -2,6 +2,7 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 
+use async_trait::async_trait;
 use onnxruntime_ng::{
     environment::Environment, ndarray, tensor::OrtOwnedTensor, GraphOptimizationLevel, LoggingLevel,
 };
@@ -38,8 +39,9 @@ impl OnnxWrapper {
     }
 }
 
+#[async_trait]
 impl Processor for OnnxWrapper {
-    fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
+    async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("onnx");
         let _inner_perf_log = PerfLogger::new("onnx load from mem");
         let mut session = self

@@ -1,4 +1,5 @@
 use anyhow::Ok;
+use async_trait::async_trait;
 use fasttext::FastText;
 
 use crate::{
@@ -22,8 +23,9 @@ impl FastTextWrapper {
     }
 }
 
+#[async_trait]
 impl Processor for FastTextWrapper {
-    fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
+    async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("fast text embeddigs");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {

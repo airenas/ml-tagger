@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     handlers::{
-        data::{Result, Service, Word, WorkContext, WorkWord},
+        data::{Result, Service, Word, WorkContext, WorkWord, MI},
         errors::OtherError,
     },
     utils::PerfLogger,
@@ -32,12 +32,19 @@ pub async fn handler(
     let srv = srv_wrap.read().await;
     srv.embedder
         .process(&mut ctx)
+        .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
     srv.onnx
         .process(&mut ctx)
+        .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
     srv.tag_mapper
         .process(&mut ctx)
+        .await
+        .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.lemmatize_words_mapper
+        .process(&mut ctx)
+        .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
 
     let mut res = Vec::<Vec<Word>>::new();
@@ -49,16 +56,32 @@ pub async fn handler(
                 mi: None,
                 lemma: None,
                 w_type: None,
-                embeddings: match ctx.params.debug {
+                embeddings: match is_wanted(&ctx.params.debug, "emb:") {
                     Some(true) => word.embeddings,
                     _ => None,
                 },
-                predicted: match ctx.params.debug {
+                predicted: match is_wanted(&ctx.params.debug, "predicted:") {
                     Some(true) => word.predicted,
                     _ => None,
                 },
-                predicted_str: match ctx.params.debug {
+                predicted_str: match is_wanted(&ctx.params.debug, "predicted_str") {
                     Some(true) => word.predicted_str,
+                    _ => None,
+                },
+                mis: match is_wanted(&ctx.params.debug, "mis") {
+                    Some(true) => match word.mis {
+                        Some(mis) => {
+                            let mis_res = mis
+                                .iter()
+                                .map(|mi| MI {
+                                    lemma: mi.lemma.clone(),
+                                    mi: mi.mi.clone(),
+                                })
+                                .collect();
+                            Some(mis_res)
+                        }
+                        _ => None,
+                    },
                     _ => None,
                 },
             });
@@ -68,4 +91,16 @@ pub async fn handler(
     }
 
     Ok(warp::reply::json(&res).into_response())
+}
+
+fn is_wanted(debug: &Option<String>, arg: &str) -> Option<bool> {
+    match debug {
+        Some(v) => {
+            if v.contains(arg) {
+                return Some(true);
+            }
+            return None;
+        }
+        None => None,
+    }
 }

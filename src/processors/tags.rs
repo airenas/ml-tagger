@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 
 use anyhow::Ok;
+use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext};
 use crate::utils::PerfLogger;
@@ -29,8 +30,9 @@ impl TagsMapper {
     }
 }
 
+#[async_trait]
 impl Processor for TagsMapper {
-    fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
+    async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("tags mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {

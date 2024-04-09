@@ -55,11 +55,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
 
+    let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url)?;
+    let boxed_lw_mapper: Box<dyn data::Processor + Send + Sync> = Box::new(lw_mapper);
+
     let srv = Arc::new(RwLock::new(Service {
         calls: 0,
         embedder: boxed_embedder,
         onnx: boxed_onnx,
         tag_mapper: boxed_tags,
+        lemmatize_words_mapper: boxed_lw_mapper,
     }));
 
     let live_route = warp::get()
