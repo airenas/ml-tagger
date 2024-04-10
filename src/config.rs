@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use clap::ArgMatches;
 
 pub struct Config {
@@ -7,6 +9,8 @@ pub struct Config {
     pub onnx: String,
     pub tags: String,
     pub lemma_url: String,
+    pub data_dir: String,
+    pub clitics: String,
 }
 
 impl Config {
@@ -26,17 +30,29 @@ impl Config {
             Some(v) => Ok(v),
             None => Err("no onnx file"),
         }?;
-        let tags_file = match args.get_one::<String>("tags") {
+        let data_dir = match args.get_one::<String>("data_dir") {
             Some(v) => Ok(v),
-            None => Err("no tags file"),
+            None => Err("no data_dir"),
         }?;
+        let clitics = Path::new(data_dir)
+            .join("clitics")
+            .into_os_string()
+            .into_string()
+            .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
+        let tags = Path::new(data_dir)
+            .join("tags")
+            .into_os_string()
+            .into_string()
+            .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
         Ok(Config {
             port,
             version: "dev".to_string(),
             embeddings: embeddings_file.to_string(),
             onnx: onnx_file.to_string(),
-            tags: tags_file.to_string(),
-            lemma_url: "http://klcdocker.vdu.lt/morfdemo/api.lema/analyze".to_string()
+            tags,
+            data_dir: data_dir.to_string(),
+            lemma_url: "http://klcdocker.vdu.lt/morfdemo/api.lema/analyze".to_string(),
+            clitics,
         })
     }
 }

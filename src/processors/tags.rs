@@ -16,7 +16,7 @@ impl TagsMapper {
     pub fn new(file_str: &str) -> anyhow::Result<TagsMapper> {
         let _perf_log = PerfLogger::new("tags loader");
         log::info!("Loading vocab from {}", file_str);
-        let tags = read_vocab_file("/home/airenas/projects/re-tagger/egs/bilstm_crf/data_v2/tags")?;
+        let tags = read_vocab_file(file_str)?;
         let mut vocab_lookup: HashMap<i32, String> = HashMap::new();
         for (index, tag) in tags.into_iter().enumerate() {
             vocab_lookup.insert(index as i32, tag);

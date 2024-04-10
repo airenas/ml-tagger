@@ -1,11 +1,11 @@
 -include Makefile.options
 ###############################################################################
 run:
-	RUST_LOG=INFO cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --tags ${TAGS_FILE}
+	RUST_LOG=INFO cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR}
 .PHONY: run
 ###############################################################################
 run/build: build/local
-	RUST_LOG=INFO target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --tags ${TAGS_FILE}
+	RUST_LOG=INFO target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR}
 .PHONY: run/build
 ###############################################################################
 build/local: 

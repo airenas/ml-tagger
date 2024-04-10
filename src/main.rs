@@ -58,12 +58,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url)?;
     let boxed_lw_mapper: Box<dyn data::Processor + Send + Sync> = Box::new(lw_mapper);
 
+    let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
+    let boxed_clitics: Box<dyn data::Processor + Send + Sync> = Box::new(clitics);
+
     let srv = Arc::new(RwLock::new(Service {
         calls: 0,
         embedder: boxed_embedder,
         onnx: boxed_onnx,
         tag_mapper: boxed_tags,
         lemmatize_words_mapper: boxed_lw_mapper,
+        clitics: boxed_clitics,
     }));
 
     let live_route = warp::get()
@@ -142,11 +146,11 @@ fn app_config() -> Result<Config, String> {
                 .required(true),
         )
         .arg(
-            Arg::new("tags")
-                .long("tags")
-                .value_name("TAGS_FILE")
-                .env("TAGS_FILE")
-                .help("Tags file")
+            Arg::new("data_dir")
+                .long("data_dir")
+                .value_name("DATA_DIR")
+                .env("DATA_DIR")
+                .help("Data directory")
                 .required(true),
         )
         .get_matches();

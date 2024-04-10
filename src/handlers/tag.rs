@@ -42,6 +42,10 @@ pub async fn handler(
         .process(&mut ctx)
         .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.clitics
+        .process(&mut ctx)
+        .await
+        .map_err(|e| OtherError { msg: e.to_string() })?;
     srv.lemmatize_words_mapper
         .process(&mut ctx)
         .await

@@ -119,27 +119,31 @@ impl Processor for LemmatizeWordsMapper {
 
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                words_map.insert(word_info.w.clone(), None);
+                if word_info.mis.is_none() {
+                    words_map.insert(word_info.w.clone(), None);
+                }
             }
         }
         self.lemmatize(&mut words_map).await?;
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                match words_map.get(&word_info.w) {
-                    Some(res) => {
-                        if res.is_some() {
-                            word_info.mis = res.clone().map(|vec| vec.clone());
-                        } else {
-                            Err(Error::msg(format!(
-                                "word is not lemmatized {}",
-                                &word_info.w
-                            )))?
+                if word_info.mis.is_none() {
+                    match words_map.get(&word_info.w) {
+                        Some(res) => {
+                            if res.is_some() {
+                                word_info.mis = res.clone().map(|vec| vec.clone());
+                            } else {
+                                Err(Error::msg(format!(
+                                    "word is not lemmatized {}",
+                                    &word_info.w
+                                )))?
+                            }
                         }
+                        _ => Err(Error::msg(format!(
+                            "word is not lemmatized {}",
+                            &word_info.w
+                        )))?,
                     }
-                    _ => Err(Error::msg(format!(
-                        "word is not lemmatized {}",
-                        &word_info.w
-                    )))?,
                 }
             }
         }
