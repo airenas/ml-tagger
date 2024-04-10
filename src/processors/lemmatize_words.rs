@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, Ok};
 use async_trait::async_trait;
+use moka::future::Cache;
+use moka::policy::EvictionPolicy;
 use serde::Deserialize;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
@@ -12,6 +15,7 @@ use reqwest::Client;
 pub struct LemmatizeWordsMapper {
     client: Client,
     url: String,
+    cache: Cache<String, Arc<Vec<WorkMI>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,9 +39,16 @@ struct LemmaResponse {
 
 impl LemmatizeWordsMapper {
     pub fn new(url_str: &str) -> anyhow::Result<LemmatizeWordsMapper> {
+        let cache: Cache<String, Arc<Vec<WorkMI>>> = Cache::builder()
+            .max_capacity(64 * 1024 * 1024)
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            // .time_to_live(Duration::from_secs(60*60*24))
+            .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
+            .build();
         let res = LemmatizeWordsMapper {
             client: Client::builder().timeout(Duration::from_secs(10)).build()?,
             url: url_str.to_string(),
+            cache,
         };
         Ok(res)
     }
@@ -48,8 +59,22 @@ impl LemmatizeWordsMapper {
     ) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lemmatizing");
         for (key, value) in map.iter_mut() {
-            let new_value = self.make_request(key).await?;
-            *value = new_value;
+            let cv = self.cache.get(key).await;
+            if let Some(val) = cv {
+                log::info!("in lemma cache: {key}");
+                let new_value = Arc::clone(&val);
+                let extracted = (*new_value).clone();
+                *value = Some(extracted);
+            }
+        }
+        for (key, value) in map.iter_mut() {
+            if value.is_none() {
+                let new_value = self.make_request(key).await?;
+                if let Some(val) = new_value {
+                    *value = Some(val.clone());
+                    self.cache.insert(key.clone(), Arc::new(val)).await;
+                }
+            }
         }
         Ok(())
     }

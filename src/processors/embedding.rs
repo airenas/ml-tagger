@@ -1,6 +1,9 @@
+use std::{sync::Arc, time::Duration};
+
 use anyhow::Ok;
 use async_trait::async_trait;
 use fasttext::FastText;
+use moka::{future::Cache, policy::EvictionPolicy};
 
 use crate::{
     handlers::data::{Processor, WorkContext},
@@ -9,6 +12,7 @@ use crate::{
 
 pub struct FastTextWrapper {
     model: FastText,
+    cache: Cache<String, Arc<Vec<f32>>>,
 }
 
 impl FastTextWrapper {
@@ -18,7 +22,13 @@ impl FastTextWrapper {
         log::info!("Loading FastText from {}", file);
         model.load_model(file).map_err(anyhow::Error::msg)?;
         log::info!("Loaded FastText dim {}", model.get_dimension(),);
-        let res = FastTextWrapper { model };
+        let cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
+            .max_capacity(64 * 1024 * 1024)
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            // .time_to_live(Duration::from_secs(60*60*24))
+            .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
+            .build();
+        let res = FastTextWrapper { model, cache };
         Ok(res)
     }
 }
@@ -29,11 +39,21 @@ impl Processor for FastTextWrapper {
         let _perf_log = PerfLogger::new("fast text embeddigs");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                let embedding = self
-                    .model
-                    .get_word_vector(&word_info.w)
-                    .map_err(anyhow::Error::msg)?;
-                word_info.embeddings = Some(embedding);
+                let w = &word_info.w;
+                let emb = self.cache.get(w).await;
+                if let Some(val) = emb {
+                    log::info!("in emb cache: {w}");
+                    let new_value = Arc::clone(&val);
+                    let extracted = (*new_value).clone();
+                    word_info.embeddings = Some(extracted);
+                } else {
+                    let embedding = self
+                        .model
+                        .get_word_vector(&word_info.w)
+                        .map_err(anyhow::Error::msg)?;
+                    word_info.embeddings = Some(embedding.clone());
+                    self.cache.insert(w.clone(), Arc::new(embedding)).await;
+                }
             }
         }
         Ok(())
