@@ -5,7 +5,7 @@ run:
 .PHONY: run
 ###############################################################################
 run/build: build/local
-	RUST_LOG=DEBUG target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --tags ${TAGS_FILE}
+	RUST_LOG=INFO target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --tags ${TAGS_FILE}
 .PHONY: run/build
 ###############################################################################
 build/local: 

@@ -61,7 +61,7 @@ impl LemmatizeWordsMapper {
         for (key, value) in map.iter_mut() {
             let cv = self.cache.get(key).await;
             if let Some(val) = cv {
-                log::info!("in lemma cache: {key}");
+                log::debug!("in lemma cache: {key}");
                 let new_value = Arc::clone(&val);
                 let extracted = (*new_value).clone();
                 *value = Some(extracted);

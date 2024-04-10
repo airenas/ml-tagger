@@ -42,7 +42,7 @@ impl Processor for FastTextWrapper {
                 let w = &word_info.w;
                 let emb = self.cache.get(w).await;
                 if let Some(val) = emb {
-                    log::info!("in emb cache: {w}");
+                    log::debug!("in emb cache: {w}");
                     let new_value = Arc::clone(&val);
                     let extracted = (*new_value).clone();
                     word_info.embeddings = Some(extracted);
