@@ -11,6 +11,7 @@ pub struct Config {
     pub lemma_url: String,
     pub data_dir: String,
     pub clitics: String,
+    pub frequencies: String,
 }
 
 impl Config {
@@ -44,6 +45,11 @@ impl Config {
             .into_os_string()
             .into_string()
             .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
+        let frequencies = Path::new(data_dir)
+            .join("tags_freq")
+            .into_os_string()
+            .into_string()
+            .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
         Ok(Config {
             port,
             version: "dev".to_string(),
@@ -53,6 +59,7 @@ impl Config {
             data_dir: data_dir.to_string(),
             lemma_url: "http://klcdocker.vdu.lt/morfdemo/api.lema/analyze".to_string(),
             clitics,
+            frequencies,
         })
     }
 }

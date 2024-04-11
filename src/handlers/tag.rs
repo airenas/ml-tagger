@@ -50,6 +50,10 @@ pub async fn handler(
         .process(&mut ctx)
         .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.restorer
+        .process(&mut ctx)
+        .await
+        .map_err(|e| OtherError { msg: e.to_string() })?;
 
     let mut res = Vec::<Vec<Word>>::new();
     for sentence in ctx.sentences {
@@ -57,8 +61,14 @@ pub async fn handler(
         for word in sentence {
             res_sentence.push(Word {
                 w: word.w,
-                mi: None,
-                lemma: None,
+                mi: match word.mi {
+                    Some(v) => Some(v.clone()),
+                    _ => None,
+                },
+                lemma: match word.lemma {
+                    Some(v) => Some(v.clone()),
+                    _ => None,
+                },
                 w_type: None,
                 embeddings: match is_wanted(&ctx.params.debug, "emb:") {
                     Some(true) => word.embeddings,

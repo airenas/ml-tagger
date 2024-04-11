@@ -61,6 +61,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
     let boxed_clitics: Box<dyn data::Processor + Send + Sync> = Box::new(clitics);
 
+    let restorer = processors::restorer::Restorer::new(&cfg.frequencies)?;
+    let boxed_restorer: Box<dyn data::Processor + Send + Sync> = Box::new(restorer);
+
     let srv = Arc::new(RwLock::new(Service {
         calls: 0,
         embedder: boxed_embedder,
@@ -68,6 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tag_mapper: boxed_tags,
         lemmatize_words_mapper: boxed_lw_mapper,
         clitics: boxed_clitics,
+        restorer: boxed_restorer
     }));
 
     let live_route = warp::get()
