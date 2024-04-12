@@ -5,11 +5,11 @@ use std::io::{self, BufRead};
 use anyhow::Ok;
 use async_trait::async_trait;
 
-use crate::handlers::data::{Processor, WorkContext, WorkWord};
+use crate::handlers::data::{Processor, WorkContext, WorkMI, WorkWord};
 use crate::utils::PerfLogger;
 
 pub struct Restorer {
-    frequency_vocab: HashMap<String, Vec<(String, u32)>>,
+    frequency_vocab: HashMap<String, HashMap<String, u32>>,
 }
 
 impl Restorer {
@@ -25,18 +25,23 @@ impl Restorer {
     fn restore(
         &self,
         word_info: &WorkWord,
-        _freq_data: Option<&Vec<(String, u32)>>,
+        freq_data: Option<&HashMap<String, u32>>,
     ) -> anyhow::Result<(Option<String>, Option<String>)> {
-        if let Some(mis) = word_info.mis.as_ref() {
-            if mis.is_empty() {
-                return Ok((None, None));
+        if let Some(predicted) = &word_info.predicted_str {
+            if let Some(mis) = word_info.mis.as_ref() {
+                if mis.len() == 1 {
+                    let mi = mis.first().unwrap();
+                    return Ok((mi.mi.clone(), mi.lemma.clone()));
+                }
+                if mis.len() > 1 {
+                    let mi = restore(mis, predicted, freq_data);
+                    return Ok((mi.mi, mi.lemma));
+                }
             }
-            if mis.len() == 1 {
-                let mi = mis.first().unwrap();
-                return Ok((mi.mi.clone(), mi.lemma.clone()));
-            }
+            Ok((None, Some(predicted.clone())))
+        } else {
+            Err(anyhow::anyhow!("no prediction for: {}", word_info.w))
         }
-        Ok((None, None))
     }
 }
 
@@ -56,10 +61,10 @@ impl Processor for Restorer {
     }
 }
 
-fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, Vec<(String, u32)>>> {
+fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<String, u32>>> {
     let file = File::open(filename)?;
     let reader = io::BufReader::new(file);
-    let mut clitics_map: HashMap<String, Vec<(String, u32)>> = HashMap::new();
+    let mut clitics_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
     for line in reader.lines() {
         let (key, value) = parse_line(line?)?;
         clitics_map.insert(key, value);
@@ -68,11 +73,11 @@ fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, Vec<(String,
     Ok(clitics_map)
 }
 
-fn parse_line(line: String) -> anyhow::Result<(String, Vec<(String, u32)>)> {
+fn parse_line(line: String) -> anyhow::Result<(String, HashMap<String, u32>)> {
     let parts: Vec<&str> = line.split('\t').collect();
     if let Some(p) = parts.get(1) {
         let mi_parts: Vec<&str> = p.split_whitespace().collect();
-        let res: anyhow::Result<Vec<(String, u32)>> = mi_parts
+        let res: anyhow::Result<HashMap<String, u32>> = mi_parts
             .iter()
             .map(|&part| {
                 let mut split = part.split(':');
@@ -95,7 +100,7 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<(String, u32)>)> {
                 Ok((mi, freq))
             })
             .collect();
-        let res: Vec<(String, u32)> = res?;
+        let res: HashMap<String, u32> = res?;
         let w = parts.first().unwrap().trim().to_string();
         if w.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
@@ -108,79 +113,90 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<(String, u32)>)> {
     Err(anyhow::anyhow!("failed parse line: {}", line))
 }
 
-// fn half_change(pos: &str, predited: char, t: char, i: usize) -> bool {
-//     match pos {
-//         "N" => {
-//             if (i == 2 && predited == 'f' && t == 'c') || (i == 3 && predited == 'p' && t == 'd') {
-//                 return true;
-//             }
-//         }
-//         "A" => {
-//             if (i == 3 && predited == 'f' && t == 'n') || (i == 4 && predited == 'p' && t == 'd') {
-//                 return true;
-//             }
-//         }
-//         "P" => {
-//             if i == 3 && predited == 'p' && t == 'd' {
-//                 return true;
-//             }
-//         }
-//         _ => {}
-//     }
-//     false
-// }
+fn half_change(pos: char, predited: char, t: char, i: usize) -> bool {
+    match pos {
+        'N' => {
+            if (i == 2 && predited == 'f' && t == 'c') || (i == 3 && predited == 'p' && t == 'd') {
+                return true;
+            }
+        }
+        'A' => {
+            if (i == 3 && predited == 'f' && t == 'n') || (i == 4 && predited == 'p' && t == 'd') {
+                return true;
+            }
+        }
+        'P' => {
+            if i == 3 && predited == 'p' && t == 'd' {
+                return true;
+            }
+        }
+        _ => {}
+    }
+    false
+}
 
-// fn calc(p: &str, t: &str) -> f64 {
-//     if p.chars().next() != t.chars().next() {
-//         return 50.0;
-//     }
-//     let mut res = 0.0;
-//     for (i, (pv, tv)) in p.chars().zip(t.chars()).enumerate() {
-//         if pv != tv {
-//             if half_change(&p[0..1], pv, tv, i) {
-//                 res += 0.03;
-//             } else if pv != '-' {
-//                 res += 1.0;
-//             } else {
-//                 res += 0.01;
-//             }
-//         }
-//     }
-//     res
-// }
+fn calc(p: &str, t: &str) -> f64 {
+    if p.chars().next() != t.chars().next() {
+        return 50.0;
+    }
+    let p_first = p.chars().next().unwrap_or('-');
+    let mut res = 0.0;
+    for (i, (pv, tv)) in p.chars().zip(t.chars()).enumerate() {
+        if pv != tv {
+            if half_change(p_first, pv, tv, i) {
+                res += 0.03;
+            } else if pv != '-' {
+                res += 1.0;
+            } else {
+                res += 0.01;
+            }
+        }
+    }
+    res
+}
 
-// fn restore(all: &[String], pred: &str, tags: &std::collections::HashMap<String, i32>) -> (String, bool, bool, bool) {
-//     if all.is_empty() {
-//         return (pred.to_string(), false, true, false);
-//     }
-//     let mut bv = 1000.0;
-//     let mut pl: Vec<char> = pred.chars().collect();
-//     let mut mult = std::collections::HashSet::new();
-//     let mut res = String::new();
-//     for t in all {
-//         let v = calc(&pl.iter().collect::<String>(), t);
-//         let freq_p = 0.001 / (tags.get(t).unwrap_or(&0) as f64 + 1.0);
-//         let mut v = v + freq_p;
-//         if v < 1.0 {
-//             mult.insert(t.clone());
-//             if mult.len() > 1 {
-//                 // do something
-//             }
-//         }
-//         if v < bv {
-//             bv = v;
-//             res = t.clone();
-//         }
-//     }
-//     (res, bv < 1.0, bv == 50.0, mult.len() > 1)
-// }
+fn restore(
+    all: &Vec<WorkMI>,
+    predicted: &str,
+    freq_data: Option<&HashMap<String, u32>>,
+) -> WorkMI {
+    let mut bv = 1000.0;
+    let empty_res = WorkMI {
+        mi: None,
+        lemma: None,
+    };
+    let mut res: &WorkMI = &empty_res;
+    for t in all {
+        let mut v = calc(
+            predicted,
+            t.mi.as_ref().map_or("", |f| f.as_str()),
+        );
+        let freq_p = 0.001 / (get_freq(freq_data, &t.mi) + 1.0);
+        v += freq_p;
+        if v < bv {
+            bv = v;
+            res = t;
+        }
+    }
+    res.clone()
+}
+
+fn get_freq(freq_data: Option<&HashMap<String, u32>>, mi: &Option<String>) -> f64 {
+    if let Some(fd) = freq_data {
+        if let Some(mi_v) = mi {
+            let v = fd.get(mi_v);
+            return v.map_or(0.0, |f| *f as f64);
+        }
+    }
+    0.0
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    fn test_parse(input: String, expected: (String, Vec<(String, u32)>)) {
+    fn test_parse(input: String, expected: (String, HashMap<String, u32>)) {
         assert_eq!(parse_line(input).unwrap(), expected);
     }
 
@@ -199,9 +215,9 @@ mod tests {
     }
 
     parse_line_test!(parse_line_ok,
-        one_mi: "olia ol\taaa:10".to_string(), ("olia ol".to_string(), vec![("aaa".to_string(), 10)]),
-        two_mi: "olia ol\tPgfsdn:2 Pgmsdn:1".to_string(), ("olia ol".to_string(), vec![("Pgfsdn".to_string(), 2), ("Pgmsdn".to_string(), 1)]),
-        more_mi: "olia \taa:11 bb:22 cc:33 dd:44".to_string(), ("olia".to_string(), vec![("aa".to_string(), 11), ("bb".to_string(), 22), ("cc".to_string(), 33),  ("dd".to_string(), 44)]),
+        one_mi: "olia ol\taaa:10".to_string(), ("olia ol".to_string(), HashMap::from([("aaa".to_string(), 10)])),
+        two_mi: "olia ol\tPgfsdn:2 Pgmsdn:1".to_string(), ("olia ol".to_string(), HashMap::from([("Pgfsdn".to_string(), 2), ("Pgmsdn".to_string(), 1)])),
+        more_mi: "olia \taa:11 bb:22 cc:33 dd:44".to_string(), ("olia".to_string(), HashMap::from([("aa".to_string(), 11), ("bb".to_string(), 22), ("cc".to_string(), 33),  ("dd".to_string(), 44)])),
     );
 
     fn test_parse_fail(input: String) {
@@ -229,5 +245,30 @@ mod tests {
         bad_number: "aaa\tolia:b10".to_string(),
         no_mi: "aukštą\t:15 Agpfsan:14 Ncmsan-:13".to_string(),
         no_tab: "aukštą aaa:15 Agpfsan:14 Ncmsan-:13".to_string(),
+    );
+
+    fn test_half_change(pos: char, predicted: char, t: char, i: usize, expected: bool) {
+        let got = half_change(pos, predicted, t, i);
+        assert_eq!(got, expected);
+    }
+
+    macro_rules! half_change_test {
+        ($suite:ident, $($name:ident: $pos:expr, $predicted:expr, $t:expr, $i:expr, $expected:expr,)*) => {
+            mod $suite {
+                use super::*;
+                $(
+                    #[test]
+                    fn $name() {
+                        test_half_change($pos, $predicted, $t, $i, $expected);
+                    }
+                )*
+            }
+        }
+    }
+
+    half_change_test!(half_change_test,
+        dktv: 'N', 'f', 'c', 2, true,
+        bdv: 'A', 'f', 'n', 3, true,
+        false_bdv: 'A', 'f', 'n', 2, false,
     );
 }
