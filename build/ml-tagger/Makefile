@@ -1,11 +1,11 @@
 ####################################################################################
-service=airenas/ml-tagger-ws
+service=airenas/ml-tagger
 version?=dev
 ########### DOCKER ##################################################################
 tag=$(service):$(version)
 
 dbuild:
-	cd ../.. && docker buildx build -t $(tag) --progress=plain --build-arg BUILD_VERSION=$(version) -f build/ml-tagger-ws/Dockerfile .
+	cd ../.. && docker buildx build -t $(tag) --build-arg BUILD_VERSION=$(version) -f build/ml-tagger/Dockerfile .
 
 dpush: dbuild
 	docker push $(tag)
