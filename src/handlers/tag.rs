@@ -61,14 +61,8 @@ pub async fn handler(
         for word in sentence {
             res_sentence.push(Word {
                 w: word.w,
-                mi: match word.mi {
-                    Some(v) => Some(v.clone()),
-                    _ => None,
-                },
-                lemma: match word.lemma {
-                    Some(v) => Some(v.clone()),
-                    _ => None,
-                },
+                mi: word.mi,
+                lemma: word.lemma,
                 w_type: None,
                 embeddings: match is_wanted(&ctx.params.debug, "emb:") {
                     Some(true) => word.embeddings,
@@ -113,7 +107,7 @@ fn is_wanted(debug: &Option<String>, arg: &str) -> Option<bool> {
             if v.contains(arg) {
                 return Some(true);
             }
-            return None;
+            None
         }
         None => None,
     }

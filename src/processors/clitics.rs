@@ -31,7 +31,7 @@ impl Processor for Clitics {
             for word_info in sent.iter_mut() {
                 if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {
                     word_info.mis = Some(
-                        res.into_iter()
+                        res.iter()
                             .map(|f| WorkMI {
                                 mi: Some(f.clone()),
                                 lemma: None,
@@ -62,19 +62,19 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<String>)> {
     if let Some(p) = parts.get(1) {
         let mis = p
             .split(';')
-            .map(|f| f.split(":").skip(1).take(1).collect())
+            .map(|f| f.split(':').skip(1).take(1).collect())
             .collect::<Vec<String>>();
-        let res: Vec<String> = mis.into_iter().filter(|f| f.len() > 0).collect();
-        if res.len() == 0 {
+        let res: Vec<String> = mis.into_iter().filter(|f| !f.is_empty()).collect();
+        if res.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}", line));
         }
-        let w = parts.get(0).unwrap().trim().to_string();
-        if w.len() == 0 {
+        let w = parts.first().unwrap().trim().to_string();
+        if w.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
         }
         return Ok((w, res));
     }
-    return Err(anyhow::anyhow!("failed parse line: {}", line));
+    Err(anyhow::anyhow!("failed parse line: {}", line))
 }
 
 #[cfg(test)]

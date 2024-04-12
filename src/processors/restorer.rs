@@ -25,18 +25,18 @@ impl Restorer {
     fn restore(
         &self,
         word_info: &WorkWord,
-        freq_data: Option<&Vec<(String, u32)>>,
+        _freq_data: Option<&Vec<(String, u32)>>,
     ) -> anyhow::Result<(Option<String>, Option<String>)> {
         if let Some(mis) = word_info.mis.as_ref() {
-            if mis.len() == 0 {
+            if mis.is_empty() {
                 return Ok((None, None));
             }
             if mis.len() == 1 {
-                let mi = mis.get(0).unwrap();
+                let mi = mis.first().unwrap();
                 return Ok((mi.mi.clone(), mi.lemma.clone()));
             }
         }
-        return Ok((None, None));
+        Ok((None, None))
     }
 }
 
@@ -89,23 +89,23 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<(String, u32)>)> {
                             .parse::<u32>()
                             .map_err(|err| anyhow::anyhow!("no freq in {part}: {err}"))
                     })?;
-                if mi.len() == 0 {
+                if mi.is_empty() {
                     return Err(anyhow::anyhow!("failed parse line: {}: no mi", line));
                 }
                 Ok((mi, freq))
             })
             .collect();
         let res: Vec<(String, u32)> = res?;
-        let w = parts.get(0).unwrap().trim().to_string();
-        if w.len() == 0 {
+        let w = parts.first().unwrap().trim().to_string();
+        if w.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
         }
-        if res.len() == 0 {
+        if res.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}", line));
         }
         return Ok((w, res));
     }
-    return Err(anyhow::anyhow!("failed parse line: {}", line));
+    Err(anyhow::anyhow!("failed parse line: {}", line))
 }
 
 // fn half_change(pos: &str, predited: char, t: char, i: usize) -> bool {

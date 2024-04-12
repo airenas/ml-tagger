@@ -131,7 +131,7 @@ impl Processor for LemmatizeWordsMapper {
                     match words_map.get(&word_info.w) {
                         Some(res) => {
                             if res.is_some() {
-                                word_info.mis = res.clone().map(|vec| vec.clone());
+                                word_info.mis = res.clone();
                             } else {
                                 Err(Error::msg(format!(
                                     "word is not lemmatized {}",
