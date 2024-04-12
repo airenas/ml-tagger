@@ -95,7 +95,7 @@ impl LemmatizeWordsMapper {
                 .json()
                 .await
                 .map_err(|err| anyhow::anyhow!("Failed to deserialize response: {}", err))?;
-            let res: Vec<WorkMI> = resp_res
+            let mut res: Vec<WorkMI> = resp_res
                 .mi
                 .iter()
                 .map(|mi| WorkMI {
@@ -103,12 +103,28 @@ impl LemmatizeWordsMapper {
                     mi: Some(mi.mi_vdu.clone()),
                 })
                 .collect();
+            if res.is_empty() {
+                res.push(WorkMI {
+                    lemma: None,
+                    mi: Some(fix_empty_lemma_res(key)),
+                });
+            }
             return Ok(Some(res));
         };
         let body = response.bytes().await?;
         let body_str = String::from_utf8_lossy(&body);
         Err(anyhow::anyhow!("Failed to make request: {}", body_str))?
     }
+}
+
+fn fix_empty_lemma_res(word: &str) -> String {
+    if word.chars().count() == 1 {
+        let c = word.chars().next().unwrap_or('-');
+        if c.is_alphabetic() {
+            return "Xr".to_string();
+        }
+    }
+    "X-".to_string()
 }
 
 #[async_trait]
@@ -149,5 +165,20 @@ impl Processor for LemmatizeWordsMapper {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_fix_empty_lemma_res() {
+        assert_eq!(fix_empty_lemma_res("10"), "X-".to_string());
+        assert_eq!(fix_empty_lemma_res("s"), "Xr".to_string());
+        assert_eq!(fix_empty_lemma_res("ą"), "Xr".to_string(), "test ą");
+        assert_eq!(fix_empty_lemma_res("š"), "Xr".to_string());
+        assert_eq!(fix_empty_lemma_res("ss"), "X-".to_string());
     }
 }

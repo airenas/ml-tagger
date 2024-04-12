@@ -26,7 +26,7 @@ impl Clitics {
 #[async_trait]
 impl Processor for Clitics {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
-        let _perf_log = PerfLogger::new("tags mapper");
+        let _perf_log = PerfLogger::new("clitics mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {

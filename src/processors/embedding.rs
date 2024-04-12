@@ -36,7 +36,7 @@ impl FastTextWrapper {
 #[async_trait]
 impl Processor for FastTextWrapper {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
-        let _perf_log = PerfLogger::new("fast text embeddigs");
+        let _perf_log = PerfLogger::new("fast text embeddings");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 let w = &word_info.w;

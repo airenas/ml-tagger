@@ -36,6 +36,7 @@ pub struct Service {
     pub tag_mapper: Box<dyn Processor + Send + Sync>,
     pub lemmatize_words_mapper: Box<dyn Processor + Send + Sync>,
     pub clitics: Box<dyn Processor + Send + Sync>,
+    pub static_words: Box<dyn Processor + Send + Sync>,
     pub restorer: Box<dyn Processor + Send + Sync>,
     pub calls: u32,
 }

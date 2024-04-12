@@ -61,6 +61,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
     let boxed_clitics: Box<dyn data::Processor + Send + Sync> = Box::new(clitics);
 
+    let statics = processors::static_words::StaticWords::new()?;
+    let boxed_statics: Box<dyn data::Processor + Send + Sync> = Box::new(statics);
+
     let restorer = processors::restorer::Restorer::new(&cfg.frequencies)?;
     let boxed_restorer: Box<dyn data::Processor + Send + Sync> = Box::new(restorer);
 
@@ -71,7 +74,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tag_mapper: boxed_tags,
         lemmatize_words_mapper: boxed_lw_mapper,
         clitics: boxed_clitics,
-        restorer: boxed_restorer
+        restorer: boxed_restorer,
+        static_words: boxed_statics,
     }));
 
     let live_route = warp::get()
