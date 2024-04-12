@@ -89,14 +89,145 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<(String, u32)>)> {
                             .parse::<u32>()
                             .map_err(|err| anyhow::anyhow!("no freq in {part}: {err}"))
                     })?;
-                Ok((mi.to_string(), freq))
+                if mi.len() == 0 {
+                    return Err(anyhow::anyhow!("failed parse line: {}: no mi", line));
+                }
+                Ok((mi, freq))
             })
             .collect();
         let res: Vec<(String, u32)> = res?;
+        let w = parts.get(0).unwrap().trim().to_string();
+        if w.len() == 0 {
+            return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
+        }
         if res.len() == 0 {
             return Err(anyhow::anyhow!("failed parse line: {}", line));
         }
-        return Ok((parts.get(0).unwrap().to_string(), res));
+        return Ok((w, res));
     }
     return Err(anyhow::anyhow!("failed parse line: {}", line));
+}
+
+// fn half_change(pos: &str, predited: char, t: char, i: usize) -> bool {
+//     match pos {
+//         "N" => {
+//             if (i == 2 && predited == 'f' && t == 'c') || (i == 3 && predited == 'p' && t == 'd') {
+//                 return true;
+//             }
+//         }
+//         "A" => {
+//             if (i == 3 && predited == 'f' && t == 'n') || (i == 4 && predited == 'p' && t == 'd') {
+//                 return true;
+//             }
+//         }
+//         "P" => {
+//             if i == 3 && predited == 'p' && t == 'd' {
+//                 return true;
+//             }
+//         }
+//         _ => {}
+//     }
+//     false
+// }
+
+// fn calc(p: &str, t: &str) -> f64 {
+//     if p.chars().next() != t.chars().next() {
+//         return 50.0;
+//     }
+//     let mut res = 0.0;
+//     for (i, (pv, tv)) in p.chars().zip(t.chars()).enumerate() {
+//         if pv != tv {
+//             if half_change(&p[0..1], pv, tv, i) {
+//                 res += 0.03;
+//             } else if pv != '-' {
+//                 res += 1.0;
+//             } else {
+//                 res += 0.01;
+//             }
+//         }
+//     }
+//     res
+// }
+
+// fn restore(all: &[String], pred: &str, tags: &std::collections::HashMap<String, i32>) -> (String, bool, bool, bool) {
+//     if all.is_empty() {
+//         return (pred.to_string(), false, true, false);
+//     }
+//     let mut bv = 1000.0;
+//     let mut pl: Vec<char> = pred.chars().collect();
+//     let mut mult = std::collections::HashSet::new();
+//     let mut res = String::new();
+//     for t in all {
+//         let v = calc(&pl.iter().collect::<String>(), t);
+//         let freq_p = 0.001 / (tags.get(t).unwrap_or(&0) as f64 + 1.0);
+//         let mut v = v + freq_p;
+//         if v < 1.0 {
+//             mult.insert(t.clone());
+//             if mult.len() > 1 {
+//                 // do something
+//             }
+//         }
+//         if v < bv {
+//             bv = v;
+//             res = t.clone();
+//         }
+//     }
+//     (res, bv < 1.0, bv == 50.0, mult.len() > 1)
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn test_parse(input: String, expected: (String, Vec<(String, u32)>)) {
+        assert_eq!(parse_line(input).unwrap(), expected);
+    }
+
+    macro_rules! parse_line_test {
+        ($suite:ident, $($name:ident: $input:expr, $expected:expr,)*) => {
+            mod $suite {
+                use super::*;
+                $(
+                    #[test]
+                    fn $name() {
+                        test_parse($input, $expected);
+                    }
+                )*
+            }
+        }
+    }
+
+    parse_line_test!(parse_line_ok,
+        one_mi: "olia ol\taaa:10".to_string(), ("olia ol".to_string(), vec![("aaa".to_string(), 10)]),
+        two_mi: "olia ol\tPgfsdn:2 Pgmsdn:1".to_string(), ("olia ol".to_string(), vec![("Pgfsdn".to_string(), 2), ("Pgmsdn".to_string(), 1)]),
+        more_mi: "olia \taa:11 bb:22 cc:33 dd:44".to_string(), ("olia".to_string(), vec![("aa".to_string(), 11), ("bb".to_string(), 22), ("cc".to_string(), 33),  ("dd".to_string(), 44)]),
+    );
+
+    fn test_parse_fail(input: String) {
+        let res = parse_line(input);
+        assert!(res.is_err());
+    }
+
+    macro_rules! parse_line_err_test {
+        ($suite:ident, $($name:ident: $input:expr,)*) => {
+            mod $suite {
+                use super::*;
+                $(
+                    #[test]
+                    fn $name() {
+                        test_parse_fail($input);
+                    }
+                )*
+            }
+        }
+    }
+
+    parse_line_err_test!(parse_line_fail,
+        no_line: "".to_string(),
+        no_word: "\tolia:10".to_string(),
+        bad_number: "aaa\tolia:b10".to_string(),
+        no_mi: "aukštą\t:15 Agpfsan:14 Ncmsan-:13".to_string(),
+        no_tab: "aukštą aaa:15 Agpfsan:14 Ncmsan-:13".to_string(),
+    );
 }

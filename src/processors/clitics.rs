@@ -70,7 +70,7 @@ fn parse_line(line: String) -> anyhow::Result<(String, Vec<String>)> {
         }
         let w = parts.get(0).unwrap().trim().to_string();
         if w.len() == 0 {
-            return Err(anyhow::anyhow!("failed parse line: {}: no  word", line));
+            return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
         }
         return Ok((w, res));
     }
