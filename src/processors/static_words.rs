@@ -35,11 +35,11 @@ impl StaticWords {
 
 fn starts_with_nonalpha_num(w: &str) -> bool {
     let c = w.chars().next().unwrap_or('-');
-    return !c.is_alphanumeric();
+    !c.is_alphanumeric()
 }
 
 fn is_number(w: &str) -> bool {
-    return w.replace(",", ".").parse::<f64>().is_ok();
+    w.replace(',', ".").parse::<f64>().is_ok()
 }
 
 #[async_trait]
