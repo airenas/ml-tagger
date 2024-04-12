@@ -1,4 +1,4 @@
-name: Snyk vulnerabilities Tests
+name: snyk vulnerabilities tests
 on:
   push:
     branches: [ main ]
