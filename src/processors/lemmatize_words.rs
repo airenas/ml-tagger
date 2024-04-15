@@ -45,6 +45,10 @@ impl LemmatizeWordsMapper {
             // .time_to_live(Duration::from_secs(60*60*24))
             .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
             .build();
+        if !url_str.contains("{}") {
+            return Err(anyhow::anyhow!("lemma url {} does not contain {{}}", url_str));
+        }
+        log::info!("lemma url: {url_str}");
         let res = LemmatizeWordsMapper {
             client: Client::builder().timeout(Duration::from_secs(10)).build()?,
             url: url_str.to_string(),
@@ -81,7 +85,7 @@ impl LemmatizeWordsMapper {
 
     async fn make_request(&self, key: &str) -> anyhow::Result<Option<Vec<WorkMI>>> {
         let _perf_log = PerfLogger::new(format!("lemmatize '{}'", key).as_str());
-        let url_str = format!("{}/{}?human=true&origin=true", self.url, key);
+        let url_str = self.url.replace("{}", key);
         log::info!("call: {url_str}");
         let response = self
             .client

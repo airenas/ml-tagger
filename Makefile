@@ -2,11 +2,11 @@
 log?=INFO
 ###############################################################################
 run:
-	RUST_LOG=$(log) cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR}
+	RUST_LOG=$(log) cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR} --lemma_url "${LEMMA_URL}"
 .PHONY: run
 ###############################################################################
 run/build: build/local
-	RUST_LOG=$(log) target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR}
+	RUST_LOG=$(log) target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data_dir ${DATA_DIR} --lemma_url "${LEMMA_URL}"
 .PHONY: run/build
 ###############################################################################
 build/local: 

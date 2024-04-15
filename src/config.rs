@@ -33,7 +33,11 @@ impl Config {
         }?;
         let data_dir = match args.get_one::<String>("data_dir") {
             Some(v) => Ok(v),
-            None => Err("no data_dir"),
+            None => Err("no data dir"),
+        }?;
+        let lemma_url = match args.get_one::<String>("lemma_url") {
+            Some(v) => Ok(v),
+            None => Err("no lemma url"),
         }?;
         let clitics = Path::new(data_dir)
             .join("clitics")
@@ -57,7 +61,7 @@ impl Config {
             onnx: onnx_file.to_string(),
             tags,
             data_dir: data_dir.to_string(),
-            lemma_url: "http://klcdocker.vdu.lt/morfdemo/api.lema/analyze".to_string(),
+            lemma_url: lemma_url.to_string(),
             clitics,
             frequencies,
         })

@@ -161,6 +161,14 @@ fn app_config() -> Result<Config, String> {
                 .help("Data directory")
                 .required(true),
         )
+        .arg(
+            Arg::new("lemma_url")
+                .long("lemma_url")
+                .value_name("LEMMA_URL")
+                .env("LEMMA_URL")
+                .help("Lemma URL")
+                .required(true),
+        )
         .get_matches();
     let mut config = Config::build(&cmd)?;
     config.version = app_version.into();

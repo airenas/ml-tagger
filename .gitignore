@@ -19,3 +19,5 @@ Cargo.lock
 /target
 .vscode/launch.json
 Makefile.options
+example/data/**
+
