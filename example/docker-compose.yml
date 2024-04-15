@@ -1,0 +1,24 @@
+version: '3.4'
+
+services:
+  tagger:
+    image: airenas/ml-tagger:${TAGGER_VERSION}
+    environment:
+      - SEGMENTATION_URL=http://lex:8080/
+      - RUST_LOG=DEBUG
+      - DATA_DIR=/data/models/tm-0.1
+      - EMBEDDINGS_FILE=/data/models/tm-0.1/delfi_cbow.bin
+      - ONNX_FILE=/data/models/tm-0.1/model.onnx
+      - LEMMA_URL=http://lemma:8000/analyze/{}
+    # restart: unless-stopped
+    ports:
+      - "${PORT}:8000" 
+    volumes:
+      - ./data/models:/data/models
+  
+  lemma:
+    image: airenas/lema:1.4.1212
+    environment:
+     - LEMA_HUNSPELL_SKIP_OFFENSIVE=false
+     - LEMA_TYPE=hunspell_lema
+     - SECRET=${LEMA_SECRET}
