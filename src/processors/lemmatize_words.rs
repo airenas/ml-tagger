@@ -9,7 +9,7 @@ use moka::policy::EvictionPolicy;
 use serde::Deserialize;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
-use crate::utils::PerfLogger;
+use crate::utils::perf::PerfLogger;
 use reqwest::Client;
 
 pub struct LemmatizeWordsMapper {

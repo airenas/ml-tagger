@@ -5,3 +5,4 @@ pub mod onnx;
 pub mod tags;
 pub mod restorer;
 pub mod static_words;
+pub mod lex;

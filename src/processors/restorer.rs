@@ -6,7 +6,7 @@ use anyhow::Ok;
 use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI, WorkWord};
-use crate::utils::PerfLogger;
+use crate::utils::perf::PerfLogger;
 
 pub struct Restorer {
     frequency_vocab: HashMap<String, HashMap<String, u32>>,

@@ -7,7 +7,7 @@ use moka::{future::Cache, policy::EvictionPolicy};
 
 use crate::{
     handlers::data::{Processor, WorkContext},
-    utils::PerfLogger,
+    utils::perf::PerfLogger,
 };
 
 pub struct FastTextWrapper {

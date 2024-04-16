@@ -3,41 +3,33 @@ use std::sync::Arc;
 use crate::{
     handlers::{
         data::{Result, Service, Word, WorkContext, WorkWord, MI},
-        errors::{OtherError, ParamError},
+        errors::OtherError,
     },
-    utils::perf::PerfLogger,
+    utils::PerfLogger,
 };
 use tokio::sync::RwLock;
-use tokio_util::bytes::Bytes;
 use warp::reply::Reply;
 
 use super::data::TagParams;
 
 pub async fn handler(
     params: TagParams,
-    input: Bytes,
+    input: Vec<Vec<String>>,
     srv_wrap: Arc<RwLock<Service>>,
 ) -> Result<impl Reply> {
     let _perf_log = PerfLogger::new("tag handler");
-
-    let s = match std::str::from_utf8(&input) {
-        Ok(v) => Ok(v),
-        Err(_) => Err(ParamError {
-            msg: "no utf-8 input".to_string(),
-        }),
-    }?;
-
-    let mut ctx = WorkContext::new(params, s.trim().to_string());
-
-    let srv = srv_wrap.read().await;
-    srv.lexer
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-
-    let cw: usize = ctx.sentences.iter().map(|f| f.len()).sum();
+    let mut ctx = WorkContext::new(params);
+    let mut cw = 0;
+    for sentence in input {
+        let mut work_sentence = Vec::<WorkWord>::new();
+        for w in sentence {
+            work_sentence.push(WorkWord::new(w));
+            cw += 1;
+        }
+        ctx.sentences.push(work_sentence);
+    }
     log::debug!("got {} sent, {} words", ctx.sentences.len(), cw);
-
+    let srv = srv_wrap.read().await;
     srv.embedder
         .process(&mut ctx)
         .await
@@ -105,6 +97,7 @@ pub async fn handler(
                     _ => None,
                 },
             });
+            cw += 1;
         }
         res.push(res_sentence);
     }

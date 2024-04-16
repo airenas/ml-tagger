@@ -6,7 +6,7 @@ use anyhow::Ok;
 use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext};
-use crate::utils::PerfLogger;
+use crate::utils::perf::PerfLogger;
 
 pub struct TagsMapper {
     vocab: HashMap<i32, String>,

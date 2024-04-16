@@ -9,6 +9,7 @@ pub struct Config {
     pub onnx: String,
     pub tags: String,
     pub lemma_url: String,
+    pub lex_url: String,
     pub data_dir: String,
     pub clitics: String,
     pub frequencies: String,
@@ -39,6 +40,10 @@ impl Config {
             Some(v) => Ok(v),
             None => Err("no lemma url"),
         }?;
+        let lex_url = match args.get_one::<String>("lex_url") {
+            Some(v) => Ok(v),
+            None => Err("no lex url"),
+        }?;
         let clitics = Path::new(data_dir)
             .join("clitics")
             .into_os_string()
@@ -62,6 +67,7 @@ impl Config {
             tags,
             data_dir: data_dir.to_string(),
             lemma_url: lemma_url.to_string(),
+            lex_url: lex_url.to_string(),
             clitics,
             frequencies,
         })

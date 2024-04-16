@@ -8,7 +8,7 @@ use onnxruntime_ng::{
 };
 
 use crate::handlers::data::{Processor, WorkContext};
-use crate::utils::PerfLogger;
+use crate::utils::perf::PerfLogger;
 
 pub struct OnnxWrapper {
     environment: Environment,

@@ -22,3 +22,9 @@ services:
      - LEMA_HUNSPELL_SKIP_OFFENSIVE=false
      - LEMA_TYPE=hunspell_lema
      - SECRET=${LEMA_SECRET}
+
+  lex:
+    image: intelektikalt/lex:latest
+    # restart: unless-stopped
+    ports:
+     - "8091:8080"   

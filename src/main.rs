@@ -4,7 +4,7 @@ use clap::Arg;
 use ml_tagger::handlers::data::{self, Service, TagParams};
 use ml_tagger::handlers::{self, errors};
 use ml_tagger::processors;
-use ml_tagger::utils::PerfLogger;
+use ml_tagger::utils::perf::PerfLogger;
 use std::process;
 use std::{error::Error, sync::Arc};
 use tokio::sync::RwLock;
@@ -46,6 +46,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         log::debug!("expected drop tx_close");
     });
 
+    let lexer = processors::lex::Lexer::new(&cfg.lex_url)?;
+    let boxed_lexer: Box<dyn data::Processor + Send + Sync> = Box::new(lexer);
+
     let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings)?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
 
@@ -76,6 +79,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         clitics: boxed_clitics,
         restorer: boxed_restorer,
         static_words: boxed_statics,
+        lexer: boxed_lexer,
     }));
 
     let live_route = warp::get()
@@ -85,7 +89,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tag_route = warp::post()
         .and(warp::path("tag"))
         .and(warp::query::<TagParams>())
-        .and(json_body())
+        .and(warp::body::content_length_limit(1024 * 1024))
+        .and(warp::body::bytes())
         .and(with_service(srv.clone()))
         .and_then(handlers::tag::handler);
 
@@ -109,10 +114,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Bye");
     Ok(())
-}
-
-fn json_body() -> impl Filter<Extract = (Vec<Vec<String>>,), Error = warp::Rejection> + Clone {
-    warp::body::content_length_limit(1024 * 1024).and(warp::body::json())
 }
 
 fn with_service(
@@ -167,6 +168,14 @@ fn app_config() -> Result<Config, String> {
                 .value_name("LEMMA_URL")
                 .env("LEMMA_URL")
                 .help("Lemma URL")
+                .required(true),
+        )
+        .arg(
+            Arg::new("lex_url")
+                .long("lex_url")
+                .value_name("LEX_URL")
+                .env("LEX_URL")
+                .help("Lex URL")
                 .required(true),
         )
         .get_matches();

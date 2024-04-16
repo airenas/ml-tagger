@@ -6,7 +6,7 @@ use anyhow::Ok;
 use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
-use crate::utils::PerfLogger;
+use crate::utils::perf::PerfLogger;
 
 pub struct Clitics {
     vocab: HashMap<String, Vec<String>>,
