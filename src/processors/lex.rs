@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use anyhow::{Error, Ok};
+use anyhow::{Ok};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::handlers::data::{Processor, WorkContext, WorkMI, WorkWord};
+use crate::handlers::data::{Processor, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
 use reqwest::Client;
@@ -36,7 +36,7 @@ impl Lexer {
     }
 
     async fn split(&self, text: &str) -> anyhow::Result<Vec<Vec<String>>> {
-        let _perf_log = PerfLogger::new(format!("call lex").as_str());
+        let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
         let response = self
             .client
@@ -95,12 +95,12 @@ impl Lexer {
 }
 
 fn get_string(
-    text: &Vec<char>,
+    text: &[char],
     v_1: usize,
     v_2: usize,
     additional_split: &HashSet<char>,
 ) -> Vec<String> {
-    let chars: Vec<char> = text[v_1..v_2].iter().map(|c| *c).collect();
+    let chars: Vec<char> = text[v_1..v_2].to_vec();
     let s: String = chars.iter().collect();
     if chars.len() == 1 {
         return vec![s];

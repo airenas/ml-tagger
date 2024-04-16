@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
 use crate::utils::perf::PerfLogger;
+use crate::utils::strings::is_number;
 
 pub struct StaticWords {
     vocab: HashMap<String, String>,
@@ -36,10 +37,6 @@ impl StaticWords {
 fn starts_with_nonalpha_num(w: &str) -> bool {
     let c = w.chars().next().unwrap_or('-');
     !c.is_alphanumeric()
-}
-
-fn is_number(w: &str) -> bool {
-    w.replace(',', ".").parse::<f64>().is_ok()
 }
 
 #[async_trait]
@@ -132,15 +129,4 @@ mod tests {
         some: "=", Some("X-".to_string()),
         with_dor: ".olia", Some("X-".to_string()),
     );
-
-    #[test]
-    fn test_is_number() {
-        assert_eq!(is_number("10"), true);
-        assert_eq!(is_number("olia"), false);
-        assert_eq!(is_number("."), false);
-        assert_eq!(is_number(".0001"), true, "{}", 0.0001);
-        assert_eq!(is_number("10,121212"), true, "{}", "10,121212");
-        assert_eq!(is_number("10.121212"), true);
-        assert_eq!(is_number("-10.121212"), true, "{}", -10.121212);
-    }
 }

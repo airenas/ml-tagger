@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     handlers::{
-        data::{Result, Service, Word, WorkContext, WorkWord, MI},
+        data::{Result, Service, Word, WorkContext, MI},
         errors::{OtherError, ParamError},
     },
     utils::perf::PerfLogger,
