@@ -72,10 +72,10 @@ pub async fn handler(
         let mut res_sentence = Vec::<Word>::new();
         for word in sentence {
             res_sentence.push(Word {
-                w: word.w,
+                w: Some(word.w),
                 mi: word.mi,
                 lemma: word.lemma,
-                w_type: None,
+                w_type: word.w_type,
                 embeddings: match is_wanted(&ctx.params.debug, "emb:") {
                     Some(true) => word.embeddings,
                     _ => None,
@@ -106,6 +106,16 @@ pub async fn handler(
                 },
             });
         }
+        res_sentence.push(Word {
+            w_type: Some("SENTENCE_END".to_string()),
+            w: None,
+            mi: None,
+            lemma: None,
+            embeddings: None,
+            predicted: None,
+            predicted_str: None,
+            mis: None,
+        });
         res.push(res_sentence);
     }
 

@@ -5,7 +5,7 @@ use warp::Rejection;
 pub struct WorkContext {
     pub params: TagParams,
     pub embeddings: Vec<f32>,
-    pub text: String, 
+    pub text: String,
     pub sentences: Vec<Vec<WorkWord>>,
 }
 
@@ -65,7 +65,8 @@ pub struct MI {
 
 #[derive(Debug, Serialize)]
 pub struct Word {
-    pub w: String,
+    #[serde(rename = "string", skip_serializing_if = "Option::is_none")]
+    pub w: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mi: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,7 +87,7 @@ impl WorkContext {
     pub fn new(params: TagParams, text: String) -> WorkContext {
         WorkContext {
             params,
-            text, 
+            text,
             embeddings: Vec::<f32>::new(),
             sentences: Vec::<Vec<WorkWord>>::new(),
         }

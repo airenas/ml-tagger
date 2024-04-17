@@ -7,6 +7,7 @@ use async_trait::async_trait;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI, WorkWord};
 use crate::utils::perf::PerfLogger;
+use crate::utils::strings::is_number;
 
 pub struct Restorer {
     frequency_vocab: HashMap<String, HashMap<String, u32>>,
@@ -55,10 +56,30 @@ impl Processor for Restorer {
                 let (mi, lemma) = self.restore(word_info, freq_data)?;
                 word_info.mi = mi;
                 word_info.lemma = lemma;
+                word_info.w_type = get_type(word_info);
             }
         }
         Ok(())
     }
+}
+
+fn get_type(word_info: &WorkWord) -> Option<String> {
+    let w = word_info.w.as_str();
+    let mi = word_info
+        .mi
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    if is_number(w) {
+        return Some("NUMBER".to_string());
+    } else if is_sep(mi) {
+        return Some("SEPARATOR".to_string());
+    }
+    Some("WORD".to_string())
+}
+
+fn is_sep(mi: &str) -> bool {
+    mi.starts_with("T")
 }
 
 fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<String, u32>>> {
@@ -155,11 +176,7 @@ fn calc(p: &str, t: &str) -> f64 {
     res
 }
 
-fn restore(
-    all: &Vec<WorkMI>,
-    predicted: &str,
-    freq_data: Option<&HashMap<String, u32>>,
-) -> WorkMI {
+fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&HashMap<String, u32>>) -> WorkMI {
     let mut bv = 1000.0;
     let empty_res = WorkMI {
         mi: None,
@@ -167,10 +184,7 @@ fn restore(
     };
     let mut res: &WorkMI = &empty_res;
     for t in all {
-        let mut v = calc(
-            predicted,
-            t.mi.as_ref().map_or("", |f| f.as_str()),
-        );
+        let mut v = calc(predicted, t.mi.as_ref().map_or("", |f| f.as_str()));
         let freq_p = 0.001 / (get_freq(freq_data, &t.mi) + 1.0);
         v += freq_p;
         if v < bv {
