@@ -108,6 +108,12 @@ fn get_string(
     if strings::is_number(s.as_str()) {
         return vec![s];
     }
+    if strings::is_url(s.as_str()) {
+        return vec![s];
+    }
+    if strings::is_email(s.as_str()) {
+        return vec![s];
+    }
     let mut res = Vec::<String>::new();
     let mut last = 0;
     for (index, matched) in s.match_indices(|c: char| additional_split.contains(&c)) {
