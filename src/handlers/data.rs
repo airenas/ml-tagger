@@ -102,11 +102,7 @@ impl WorkWord {
             is_word,
             mi: None,
             lemma: None,
-            w_type: if is_word {
-                None
-            } else {
-                Some("SPACE".to_string())
-            },
+            w_type: None,
             embeddings: None,
             predicted: None,
             predicted_str: None,

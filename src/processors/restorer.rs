@@ -57,8 +57,8 @@ impl Processor for Restorer {
                     let (mi, lemma) = self.restore(word_info, freq_data)?;
                     word_info.mi = mi;
                     word_info.lemma = lemma;
-                    word_info.w_type = get_type(word_info);
                 }
+                word_info.w_type = get_type(word_info);
             }
         }
         Ok(())
@@ -66,12 +66,11 @@ impl Processor for Restorer {
 }
 
 fn get_type(word_info: &WorkWord) -> Option<String> {
+    if !word_info.is_word {
+        return Some("SPACE".to_string());
+    }
     let w = word_info.w.as_str();
-    let mi = word_info
-        .mi
-        .as_ref()
-        .map(|s| s.as_str())
-        .unwrap_or_default();
+    let mi = word_info.mi.as_deref().unwrap_or_default();
     if is_number(w) {
         return Some("NUMBER".to_string());
     } else if is_sep(mi) {
@@ -81,7 +80,7 @@ fn get_type(word_info: &WorkWord) -> Option<String> {
 }
 
 fn is_sep(mi: &str) -> bool {
-    mi.starts_with("T")
+    mi.starts_with('T')
 }
 
 fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<String, u32>>> {
