@@ -17,6 +17,7 @@ pub struct WorkMI {
 
 pub struct WorkWord {
     pub w: String,
+    pub is_word: bool,
     pub mi: Option<String>,
     pub lemma: Option<String>,
     pub w_type: Option<String>,
@@ -95,12 +96,17 @@ impl WorkContext {
 }
 
 impl WorkWord {
-    pub fn new(w: String) -> WorkWord {
+    pub fn new(w: String, is_word: bool) -> WorkWord {
         WorkWord {
             w,
+            is_word,
             mi: None,
             lemma: None,
-            w_type: None,
+            w_type: if is_word {
+                None
+            } else {
+                Some("SPACE".to_string())
+            },
             embeddings: None,
             predicted: None,
             predicted_str: None,

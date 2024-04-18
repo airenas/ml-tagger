@@ -52,11 +52,13 @@ impl Processor for Restorer {
         let _perf_log = PerfLogger::new("restorer mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                let freq_data = self.frequency_vocab.get(&word_info.w);
-                let (mi, lemma) = self.restore(word_info, freq_data)?;
-                word_info.mi = mi;
-                word_info.lemma = lemma;
-                word_info.w_type = get_type(word_info);
+                if word_info.is_word {
+                    let freq_data = self.frequency_vocab.get(&word_info.w);
+                    let (mi, lemma) = self.restore(word_info, freq_data)?;
+                    word_info.mi = mi;
+                    word_info.lemma = lemma;
+                    word_info.w_type = get_type(word_info);
+                }
             }
         }
         Ok(())

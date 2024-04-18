@@ -45,7 +45,7 @@ impl Processor for StaticWords {
         let _perf_log = PerfLogger::new("statics mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.mis.is_none() {
+                if word_info.is_word && word_info.mis.is_none() {
                     if let Some(res) = self.try_find(&word_info.w.to_lowercase()) {
                         word_info.mis = Some(vec![WorkMI {
                             lemma: None,

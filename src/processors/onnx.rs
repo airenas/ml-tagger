@@ -57,11 +57,13 @@ impl Processor for OnnxWrapper {
             let mut combined_data: Vec<f32> = Vec::new();
             let mut cw = 0;
             for word_info in sent.iter_mut() {
-                match &word_info.embeddings {
-                    Some(emb) => combined_data.extend(emb),
-                    None => {}
+                if word_info.is_word {
+                    match &word_info.embeddings {
+                        Some(emb) => combined_data.extend(emb),
+                        None => {}
+                    }
+                    cw += 1;
                 }
-                cw += 1;
             }
             let array = ndarray::Array::from_vec(combined_data)
                 .into_shape((1, cw, 150))
@@ -75,8 +77,12 @@ impl Processor for OnnxWrapper {
                 output_values.extend(tensor_values);
             }
 
-            for (i, word_info) in sent.iter_mut().enumerate() {
-                word_info.predicted = Some(output_values[i])
+            let mut i = 0;
+            for word_info in sent.iter_mut() {
+                if word_info.is_word {
+                    word_info.predicted = Some(output_values[i]);
+                    i += 1;
+                }
             }
         }
         Ok(())

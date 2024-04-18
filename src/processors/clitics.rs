@@ -29,15 +29,17 @@ impl Processor for Clitics {
         let _perf_log = PerfLogger::new("clitics mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {
-                    word_info.mis = Some(
-                        res.iter()
-                            .map(|f| WorkMI {
-                                mi: Some(f.clone()),
-                                lemma: None,
-                            })
-                            .collect(),
-                    );
+                if word_info.is_word {
+                    if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {
+                        word_info.mis = Some(
+                            res.iter()
+                                .map(|f| WorkMI {
+                                    mi: Some(f.clone()),
+                                    lemma: None,
+                                })
+                                .collect(),
+                        );
+                    }
                 }
             }
         }

@@ -139,7 +139,7 @@ impl Processor for LemmatizeWordsMapper {
 
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.mis.is_none() {
+                if word_info.is_word && word_info.mis.is_none() {
                     words_map.insert(word_info.w.clone(), None);
                 }
             }
@@ -147,7 +147,7 @@ impl Processor for LemmatizeWordsMapper {
         self.lemmatize(&mut words_map).await?;
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.mis.is_none() {
+                if word_info.is_word &&  word_info.mis.is_none() {
                     match words_map.get(&word_info.w) {
                         Some(res) => {
                             if res.is_some() {

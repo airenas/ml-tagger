@@ -36,11 +36,13 @@ impl Processor for TagsMapper {
         let _perf_log = PerfLogger::new("tags mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if let Some(id) = word_info.predicted {
-                    match self.vocab.get(&id) {
-                        Some(tag) => word_info.predicted_str = Some(tag.to_string()),
-                        None => log::warn!("No tag by id {id}"),
-                    };
+                if word_info.is_word {
+                    if let Some(id) = word_info.predicted {
+                        match self.vocab.get(&id) {
+                            Some(tag) => word_info.predicted_str = Some(tag.to_string()),
+                            None => log::warn!("No tag by id {id}"),
+                        };
+                    }
                 }
             }
         }

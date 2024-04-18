@@ -39,20 +39,22 @@ impl Processor for FastTextWrapper {
         let _perf_log = PerfLogger::new("fast text embeddings");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                let w = &word_info.w;
-                let emb = self.cache.get(w).await;
-                if let Some(val) = emb {
-                    log::debug!("in emb cache: {w}");
-                    let new_value = Arc::clone(&val);
-                    let extracted = (*new_value).clone();
-                    word_info.embeddings = Some(extracted);
-                } else {
-                    let embedding = self
-                        .model
-                        .get_word_vector(&word_info.w)
-                        .map_err(anyhow::Error::msg)?;
-                    word_info.embeddings = Some(embedding.clone());
-                    self.cache.insert(w.clone(), Arc::new(embedding)).await;
+                if word_info.is_word {
+                    let w = &word_info.w;
+                    let emb = self.cache.get(w).await;
+                    if let Some(val) = emb {
+                        log::debug!("in emb cache: {w}");
+                        let new_value = Arc::clone(&val);
+                        let extracted = (*new_value).clone();
+                        word_info.embeddings = Some(extracted);
+                    } else {
+                        let embedding = self
+                            .model
+                            .get_word_vector(&word_info.w)
+                            .map_err(anyhow::Error::msg)?;
+                        word_info.embeddings = Some(embedding.clone());
+                        self.cache.insert(w.clone(), Arc::new(embedding)).await;
+                    }
                 }
             }
         }

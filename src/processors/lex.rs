@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use anyhow::{Ok};
+use anyhow::Ok;
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -35,7 +35,7 @@ impl Lexer {
         Ok(res)
     }
 
-    async fn split(&self, text: &str) -> anyhow::Result<Vec<Vec<String>>> {
+    async fn split(&self, text: &str) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
         let response = self
@@ -52,7 +52,7 @@ impl Lexer {
             let resp_res: LexResponse = response
                 .json()
                 .await
-                .map_err(|err| anyhow::anyhow!("Failed to deserialize response: {}", err))?;
+                .map_err(|err| anyhow::anyhow!("failed to deserialize response: {}", err))?;
             let res = self.convert(resp_res, text)?;
             return Ok(res);
         };
@@ -66,12 +66,17 @@ impl Lexer {
         ))?
     }
 
-    fn convert(&self, resp_res: LexResponse, text: &str) -> anyhow::Result<Vec<Vec<String>>> {
+    fn convert(
+        &self,
+        resp_res: LexResponse,
+        text: &str,
+    ) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let seg: Vec<(i32, i32, i32)> = group_sentences(resp_res)?;
-        let mut res: Vec<Vec<String>> = Vec::new();
-        let mut current: Vec<String> = Vec::new();
+        let mut res: Vec<Vec<(String, bool)>> = Vec::new();
+        let mut current: Vec<(String, bool)> = Vec::new();
         let chars: Vec<char> = text.chars().collect();
         let mut last_seen = 0;
+        let mut last_index = 0;
         for v in seg.iter() {
             if v.2 != last_seen {
                 if !current.is_empty() {
@@ -80,12 +85,16 @@ impl Lexer {
                 }
                 last_seen = v.2;
             }
-            current.extend(get_string(
-                &chars,
-                v.0 as usize,
-                v.1 as usize,
-                &self.additional_split,
-            ))
+            if last_index < v.0 {
+                let chars: Vec<char> = chars[last_index as usize..v.0 as usize].to_vec();
+                let s: String = chars.iter().collect();
+                current.push((s, false)); // spaces
+            }
+            let words = get_string(&chars, v.0 as usize, v.1 as usize, &self.additional_split);
+            for w in words {
+                current.push((w, true)); // words
+            }
+            last_index = v.1
         }
         if !current.is_empty() {
             res.push(current);
@@ -162,8 +171,8 @@ impl Processor for Lexer {
         let sentences = self.split(&ctx.text).await?;
         for sentence in sentences {
             let mut work_sentence = Vec::<WorkWord>::new();
-            for w in sentence {
-                work_sentence.push(WorkWord::new(w));
+            for (w, is_word) in sentence {
+                work_sentence.push(WorkWord::new(w, is_word));
             }
             ctx.sentences.push(work_sentence);
         }
