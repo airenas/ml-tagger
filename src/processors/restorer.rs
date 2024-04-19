@@ -15,7 +15,7 @@ pub struct Restorer {
 
 impl Restorer {
     pub fn new(file_str: &str) -> anyhow::Result<Restorer> {
-        let _perf_log = PerfLogger::new("restorer frequence loader");
+        let _perf_log = PerfLogger::new("restorer frequency loader");
         log::info!("Loading frequences from {}", file_str);
         let frequency_vocab = read_freq_file(file_str)?;
         log::info!("loaded frequences {}", frequency_vocab.len());
@@ -98,16 +98,27 @@ fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<Stri
 fn parse_line(line: String) -> anyhow::Result<(String, HashMap<String, u32>)> {
     let parts: Vec<&str> = line.split('\t').collect();
     if let Some(p) = parts.get(1) {
-        let mi_parts: Vec<&str> = p.split_whitespace().collect();
+        let mi_parts: Vec<&str> = p.split(';').collect();
         let res: anyhow::Result<HashMap<String, u32>> = mi_parts
             .iter()
             .map(|&part| {
                 let mut split = part.split(':');
+                let mf = split
+                    .next()
+                    .ok_or(anyhow::anyhow!("no mf in {part}"))?
+                    .trim()
+                    .to_string();
+                if mf.is_empty() {
+                    return Err(anyhow::anyhow!("failed parse line: {}: no mf", line));
+                }
                 let mi = split
                     .next()
                     .ok_or(anyhow::anyhow!("no mi in {part}"))?
                     .trim()
                     .to_string();
+                if mi.is_empty() {
+                    return Err(anyhow::anyhow!("failed parse line: {}: no mi", line));
+                }
                 let freq = split
                     .next()
                     .ok_or(anyhow::anyhow!("no freq in {part}"))
@@ -116,10 +127,8 @@ fn parse_line(line: String) -> anyhow::Result<(String, HashMap<String, u32>)> {
                             .parse::<u32>()
                             .map_err(|err| anyhow::anyhow!("no freq in {part}: {err}"))
                     })?;
-                if mi.is_empty() {
-                    return Err(anyhow::anyhow!("failed parse line: {}: no mi", line));
-                }
-                Ok((mi, freq))
+                let key = format!("{mf}:{mi}");
+                Ok((key, freq))
             })
             .collect();
         let res: HashMap<String, u32> = res?;
@@ -186,7 +195,7 @@ fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&HashMap<String
     let mut res: &WorkMI = &empty_res;
     for t in all {
         let mut v = calc(predicted, t.mi.as_ref().map_or("", |f| f.as_str()));
-        let freq_p = 0.001 / (get_freq(freq_data, &t.mi) + 1.0);
+        let freq_p = 0.001 / (get_freq(freq_data, &t.lemma, &t.mi) + 1.0);
         v += freq_p;
         if v < bv {
             bv = v;
@@ -196,11 +205,17 @@ fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&HashMap<String
     res.clone()
 }
 
-fn get_freq(freq_data: Option<&HashMap<String, u32>>, mi: &Option<String>) -> f64 {
+fn get_freq(
+    freq_data: Option<&HashMap<String, u32>>,
+    lemma: &Option<String>,
+    mi: &Option<String>,
+) -> f64 {
     if let Some(fd) = freq_data {
         if let Some(mi_v) = mi {
-            let v = fd.get(mi_v);
-            return v.map_or(0.0, |f| *f as f64);
+            if let Some(lemma_v) = lemma {
+                let v = fd.get(&format!("{lemma_v}:{mi_v}"));
+                return v.map_or(0.0, |f| *f as f64);
+            }
         }
     }
     0.0
@@ -230,9 +245,9 @@ mod tests {
     }
 
     parse_line_test!(parse_line_ok,
-        one_mi: "olia ol\taaa:10".to_string(), ("olia ol".to_string(), HashMap::from([("aaa".to_string(), 10)])),
-        two_mi: "olia ol\tPgfsdn:2 Pgmsdn:1".to_string(), ("olia ol".to_string(), HashMap::from([("Pgfsdn".to_string(), 2), ("Pgmsdn".to_string(), 1)])),
-        more_mi: "olia \taa:11 bb:22 cc:33 dd:44".to_string(), ("olia".to_string(), HashMap::from([("aa".to_string(), 11), ("bb".to_string(), 22), ("cc".to_string(), 33),  ("dd".to_string(), 44)])),
+        one_mi: "olia ol\taaa:olia:10".to_string(), ("olia ol".to_string(), HashMap::from([("aaa:olia".to_string(), 10)])),
+        two_mi: "olia ol\tPgfsdn:a:2;Pgmsdn:b:1".to_string(), ("olia ol".to_string(), HashMap::from([("Pgfsdn:a".to_string(), 2), ("Pgmsdn:b".to_string(), 1)])),
+        more_mi: "olia \taa:a:11;bb:b:22;cc:c:33;dd:d:44".to_string(), ("olia".to_string(), HashMap::from([("aa:a".to_string(), 11), ("bb:b".to_string(), 22), ("cc:c".to_string(), 33),  ("dd:d".to_string(), 44)])),
     );
 
     fn test_parse_fail(input: String) {
@@ -257,9 +272,10 @@ mod tests {
     parse_line_err_test!(parse_line_fail,
         no_line: "".to_string(),
         no_word: "\tolia:10".to_string(),
-        bad_number: "aaa\tolia:b10".to_string(),
-        no_mi: "aukštą\t:15 Agpfsan:14 Ncmsan-:13".to_string(),
-        no_tab: "aukštą aaa:15 Agpfsan:14 Ncmsan-:13".to_string(),
+        bad_number: "aaa\tolia:b:b10".to_string(),
+        no_mi: "aukštą\ta::15;Agpfsan:a:14;Ncmsan-:a:13".to_string(),
+        no_tab: "aukštą aaa:a:15;Agpfsan:a:14;Ncmsan-:a:13".to_string(),
+        no_mf: "aukštą\t:a:15".to_string(),
     );
 
     fn test_half_change(pos: char, predicted: char, t: char, i: usize, expected: bool) {
