@@ -46,7 +46,10 @@ impl LemmatizeWordsMapper {
             .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
             .build();
         if !url_str.contains("{}") {
-            return Err(anyhow::anyhow!("lemma url {} does not contain {{}}", url_str));
+            return Err(anyhow::anyhow!(
+                "lemma url {} does not contain {{}}",
+                url_str
+            ));
         }
         log::info!("lemma url: {url_str}");
         let res = LemmatizeWordsMapper {
@@ -73,7 +76,10 @@ impl LemmatizeWordsMapper {
         }
         for (key, value) in map.iter_mut() {
             if value.is_none() {
-                let new_value = self.make_request(key).await?;
+                let new_value = self
+                    .make_request(key)
+                    .await
+                    .map_err(|err| anyhow::anyhow!("lemma failure: {}", err))?;
                 if let Some(val) = new_value {
                     *value = Some(val.clone());
                     self.cache.insert(key.clone(), Arc::new(val)).await;
@@ -117,7 +123,7 @@ impl LemmatizeWordsMapper {
         };
         let body = response.bytes().await?;
         let body_str = String::from_utf8_lossy(&body);
-        Err(anyhow::anyhow!("Failed to make request: {}", body_str))?
+        Err(anyhow::anyhow!("failed to make request: {}", body_str))?
     }
 }
 
@@ -147,7 +153,7 @@ impl Processor for LemmatizeWordsMapper {
         self.lemmatize(&mut words_map).await?;
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word &&  word_info.mis.is_none() {
+                if word_info.is_word && word_info.mis.is_none() {
                     match words_map.get(&word_info.w) {
                         Some(res) => {
                             if res.is_some() {
