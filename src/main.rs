@@ -49,16 +49,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let lexer = processors::lex::Lexer::new(&cfg.lex_url)?;
     let boxed_lexer: Box<dyn data::Processor + Send + Sync> = Box::new(lexer);
 
-    let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings)?;
+    let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings, cfg.embeddings_cache)?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
 
-    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx)?;
+    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
     let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
     let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
 
-    let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url)?;
+    let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url, cfg.lemma_cache)?;
     let boxed_lw_mapper: Box<dyn data::Processor + Send + Sync> = Box::new(lw_mapper);
 
     let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
@@ -177,6 +177,33 @@ fn app_config() -> Result<Config, String> {
                 .env("LEX_URL")
                 .help("Lex URL")
                 .required(true),
+        )
+        .arg(
+            Arg::new("onnx_threads")
+                .long("onnx_threads")
+                .value_name("ONNX_THREADS")
+                .env("ONNX_THREADS")
+                .default_value("1")
+                .help("Threads to use for ONNX inference")
+                .required(false),
+        )
+        .arg(
+            Arg::new("embeddings_cache")
+                .long("embeddings_cache")
+                .value_name("EMBEDDINGS_CACHE")
+                .env("EMBEDDINGS_CACHE")
+                .default_value("100MB")
+                .help("Bytes for embeddings cache")
+                .required(false),
+        )
+        .arg(
+            Arg::new("lemma_cache")
+                .long("lemma_cache")
+                .value_name("LEMMA_CACHE")
+                .env("LEMMA_CACHE")
+                .default_value("100MB")
+                .help("Bytes for lemma cache")
+                .required(false),
         )
         .get_matches();
     let mut config = Config::build(&cmd)?;

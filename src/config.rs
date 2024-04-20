@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use byte_unit::Byte;
 use clap::ArgMatches;
 
 pub struct Config {
@@ -13,6 +14,9 @@ pub struct Config {
     pub data_dir: String,
     pub clitics: String,
     pub frequencies: String,
+    pub onnx_threads: i16,
+    pub embeddings_cache: u64,
+    pub lemma_cache: u64,
 }
 
 impl Config {
@@ -44,6 +48,13 @@ impl Config {
             Some(v) => Ok(v),
             None => Err("no lex url"),
         }?;
+        let onnx_threads = match args.get_one::<String>("onnx_threads") {
+            Some(v) => v
+                .trim()
+                .parse::<i16>()
+                .map_err(|e| -> String { format!("can't parse onnx_threads: `{v}`, {e}") }),
+            None => Err(String::from("no onnx_threads provided")),
+        }?;
         let clitics = Path::new(data_dir)
             .join("clitics")
             .into_os_string()
@@ -59,6 +70,18 @@ impl Config {
             .into_os_string()
             .into_string()
             .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
+        let embeddings_cache = match args.get_one::<String>("embeddings_cache") {
+            Some(v) => Byte::parse_str(v.trim(), true)
+                .map_err(|e| -> String { format!("can't parse embeddings_cache: `{v}`, {e}") }),
+            None => Err(String::from("no embeddings_cache provided")),
+        }?
+        .as_u64();
+        let lemma_cache: u64 = match args.get_one::<String>("lemma_cache") {
+            Some(v) => Byte::parse_str(v.trim(), true)
+                .map_err(|e| -> String { format!("can't parse lemma_cache: `{v}`, {e}") }),
+            None => Err(String::from("no lemma_cache provided")),
+        }?
+        .as_u64();
         Ok(Config {
             port,
             version: "dev".to_string(),
@@ -70,6 +93,9 @@ impl Config {
             lex_url: lex_url.to_string(),
             clitics,
             frequencies,
+            onnx_threads,
+            embeddings_cache,
+            lemma_cache,
         })
     }
 }

@@ -41,9 +41,10 @@ struct LemmaResponse {
 }
 
 impl LemmatizeWordsMapper {
-    pub fn new(url_str: &str) -> anyhow::Result<LemmatizeWordsMapper> {
+    pub fn new(url_str: &str, cache_size: u64) -> anyhow::Result<LemmatizeWordsMapper> {
+        log::info!("lemma cache: {cache_size}b");
         let cache: Cache<String, Arc<Vec<WorkMI>>> = Cache::builder()
-            .max_capacity(64 * 1024 * 1024)
+            .max_capacity(cache_size)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             // .time_to_live(Duration::from_secs(60*60*24))
             .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h

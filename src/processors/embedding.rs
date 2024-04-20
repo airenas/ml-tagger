@@ -16,14 +16,15 @@ pub struct FastTextWrapper {
 }
 
 impl FastTextWrapper {
-    pub fn new(file: &str) -> anyhow::Result<FastTextWrapper> {
+    pub fn new(file: &str, cache_size: u64) -> anyhow::Result<FastTextWrapper> {
         let _perf_log = PerfLogger::new("fast text loader");
         let mut model = FastText::new();
         log::info!("Loading FastText from {}", file);
         model.load_model(file).map_err(anyhow::Error::msg)?;
         log::info!("Loaded FastText dim {}", model.get_dimension(),);
+        log::info!("embedding cache: {cache_size}b");
         let cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
-            .max_capacity(64 * 1024 * 1024)
+            .max_capacity(cache_size)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             // .time_to_live(Duration::from_secs(60*60*24))
             .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h

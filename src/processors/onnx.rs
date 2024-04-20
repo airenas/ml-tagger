@@ -13,10 +13,11 @@ use crate::utils::perf::PerfLogger;
 pub struct OnnxWrapper {
     environment: Environment,
     model_bytes: Vec<u8>,
+    threads: i16,
 }
 
 impl OnnxWrapper {
-    pub fn new(file_str: &str) -> anyhow::Result<OnnxWrapper> {
+    pub fn new(file_str: &str, threads: i16) -> anyhow::Result<OnnxWrapper> {
         match env::var("LD_LIBRARY_PATH") {
             Ok(value) => log::info!("LD_LIBRARY_PATH: {}", value),
             Err(_) => log::warn!("LD_LIBRARY_PATH env var not found"),
@@ -31,9 +32,11 @@ impl OnnxWrapper {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
 
+        log::info!("ONNX threads {threads}");
         let res = OnnxWrapper {
             environment,
             model_bytes: buffer,
+            threads,
         };
         Ok(res)
     }
@@ -48,7 +51,7 @@ impl Processor for OnnxWrapper {
             .environment
             .new_session_builder()?
             .with_optimization_level(GraphOptimizationLevel::DisableAll)?
-            .with_number_threads(1)?
+            .with_number_threads(self.threads)?
             .with_model_from_memory(self.model_bytes.clone())?;
 
         std::mem::drop(_inner_perf_log);
