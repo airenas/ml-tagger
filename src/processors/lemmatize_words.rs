@@ -6,6 +6,9 @@ use anyhow::{Error, Ok};
 use async_trait::async_trait;
 use moka::future::Cache;
 use moka::policy::EvictionPolicy;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
@@ -13,7 +16,7 @@ use crate::utils::perf::PerfLogger;
 use reqwest::Client;
 
 pub struct LemmatizeWordsMapper {
-    client: Client,
+    client: ClientWithMiddleware,
     url: String,
     cache: Cache<String, Arc<Vec<WorkMI>>>,
 }
@@ -52,8 +55,15 @@ impl LemmatizeWordsMapper {
             ));
         }
         log::info!("lemma url: {url_str}");
+
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+        let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
+        let client_with_retry = ClientBuilder::new(client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
         let res = LemmatizeWordsMapper {
-            client: Client::builder().timeout(Duration::from_secs(10)).build()?,
+            client: client_with_retry,
             url: url_str.to_string(),
             cache,
         };

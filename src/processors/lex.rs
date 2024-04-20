@@ -3,16 +3,19 @@ use std::time::Duration;
 
 use anyhow::Ok;
 use async_trait::async_trait;
+use reqwest::Client;
+use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
 use crate::handlers::data::{Processor, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
-use reqwest::Client;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use tokio::sync::Mutex;
 
 pub struct Lexer {
-    client: Mutex<Client>,
+    client: Mutex<ClientWithMiddleware>,
     url: String,
     additional_split: HashSet<char>,
 }
@@ -28,8 +31,14 @@ impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
         log::info!("lex url: {url_str}");
         let additional_split = HashSet::from_iter("-‘\"–‑/:;`−≤≥⁰'".chars());
+
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
-        let locked_client = Mutex::new(client);
+        let client_with_retry = ClientBuilder::new(client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        let locked_client: Mutex<ClientWithMiddleware> = Mutex::new(client_with_retry);
         let res = Lexer {
             client: locked_client,
             url: url_str.to_string(),
@@ -171,7 +180,10 @@ fn group_sentences(resp_res: LexResponse) -> anyhow::Result<Vec<(i32, i32, i32)>
 impl Processor for Lexer {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lex text");
-        let sentences = self.split(&ctx.text).await.map_err(|err| anyhow::anyhow!("lex failure: {}", err))?;
+        let sentences = self
+            .split(&ctx.text)
+            .await
+            .map_err(|err| anyhow::anyhow!("lex failure: {}", err))?;
         for sentence in sentences {
             let mut work_sentence = Vec::<WorkWord>::new();
             for (w, is_word) in sentence {
