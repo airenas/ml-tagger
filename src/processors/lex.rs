@@ -9,9 +9,10 @@ use crate::handlers::data::{Processor, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
 use reqwest::Client;
+use tokio::sync::Mutex;
 
 pub struct Lexer {
-    client: Client,
+    client: Mutex<Client>,
     url: String,
     additional_split: HashSet<char>,
 }
@@ -27,8 +28,10 @@ impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
         log::info!("lex url: {url_str}");
         let additional_split = HashSet::from_iter("-‘\"–‑/:;`−≤≥⁰'".chars());
+        let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
+        let locked_client = Mutex::new(client);
         let res = Lexer {
-            client: Client::builder().timeout(Duration::from_secs(10)).build()?,
+            client: locked_client,
             url: url_str.to_string(),
             additional_split,
         };
@@ -38,8 +41,8 @@ impl Lexer {
     async fn split(&self, text: &str) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
-        let response = self
-            .client
+        let client = self.client.lock().await;
+        let response = client
             .post(self.url.clone())
             .header("Content-Type", "application/json")
             .body(text.to_string())
@@ -168,7 +171,7 @@ fn group_sentences(resp_res: LexResponse) -> anyhow::Result<Vec<(i32, i32, i32)>
 impl Processor for Lexer {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lex text");
-        let sentences = self.split(&ctx.text).await?;
+        let sentences = self.split(&ctx.text).await.map_err(|err| anyhow::anyhow!("lex failure: {}", err))?;
         for sentence in sentences {
             let mut work_sentence = Vec::<WorkWord>::new();
             for (w, is_word) in sentence {
