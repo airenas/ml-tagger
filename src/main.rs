@@ -15,7 +15,7 @@ use clap::Command;
 use config::Config;
 use tokio::signal::unix::{signal, SignalKind};
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn Error>> {
     let _perf_log = PerfLogger::new("loading service");
     env_logger::init();

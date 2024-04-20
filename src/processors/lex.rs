@@ -51,6 +51,7 @@ impl Lexer {
         let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
         let client = self.client.lock().await;
+        let _perf_real_log = PerfLogger::new("real lex");
         let response = client
             .post(self.url.clone())
             .header("Content-Type", "application/json")
