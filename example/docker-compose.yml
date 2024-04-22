@@ -5,11 +5,15 @@ services:
     image: airenas/ml-tagger:${TAGGER_VERSION}
     environment:
       - SEGMENTATION_URL=http://lex:8080/
-      - RUST_LOG=DEBUG
+      - RUST_LOG=INFO,onnxruntime_ng=ERROR
+      - ONNX_THREADS=4
       - DATA_DIR=/data/models/tm-0.1
       - EMBEDDINGS_FILE=/data/models/tm-0.1/delfi_cbow.bin
       - ONNX_FILE=/data/models/tm-0.1/model.onnx
       - LEMMA_URL=http://lemma:8000/analyze/{}
+      - LEMMA_CACHE=10MB
+      - EMBEDDINGS_CACHE=20MB
+      - LEX_URL=http://lex:8080/
     # restart: unless-stopped
     ports:
       - "${PORT}:8000" 
@@ -24,7 +28,7 @@ services:
      - SECRET=${LEMA_SECRET}
 
   lex:
-    image: intelektikalt/lex:latest
+    image: semantikadocker.vdu.lt/lex:latest
     # restart: unless-stopped
     ports:
      - "8091:8080"   

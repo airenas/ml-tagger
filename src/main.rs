@@ -93,8 +93,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .and(warp::body::bytes())
         .and(with_service(srv.clone()))
         .and_then(handlers::tag::handler);
+    let tag_parsed_route = warp::post()
+        .and(warp::path("tag-parsed"))
+        .and(warp::query::<TagParams>())
+        .and(json_body())
+        .and(with_service(srv.clone()))
+        .and_then(handlers::tag_parsed::handler);
 
     let routes = live_route
+        .or(tag_parsed_route)
         .or(tag_route)
         .with(warp::cors().allow_any_origin())
         .recover(errors::handle_rejection);
@@ -120,6 +127,11 @@ fn with_service(
     srv: Arc<RwLock<Service>>,
 ) -> impl Filter<Extract = (Arc<RwLock<Service>>,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || srv.clone())
+}
+
+
+fn json_body() -> impl Filter<Extract = (Vec<Vec<String>>,), Error = warp::Rejection> + Clone {
+    warp::body::content_length_limit(1024 * 1024).and(warp::body::json())
 }
 
 fn app_config() -> Result<Config, String> {

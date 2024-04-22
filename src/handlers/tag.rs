@@ -38,40 +38,33 @@ pub async fn handler(
     let cw: usize = ctx.sentences.iter().map(|f| f.len()).sum();
     log::debug!("got {} sent, {} words", ctx.sentences.len(), cw);
 
-    srv.embedder
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.onnx
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.tag_mapper
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.clitics
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.static_words
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.lemmatize_words_mapper
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    srv.restorer
-        .process(&mut ctx)
+    process_line(&srv, &mut ctx)
         .await
         .map_err(|e| OtherError { msg: e.to_string() })?;
 
-    let mut res = Vec::<Vec<Word>>::new();
+    let res = map_res(ctx).map_err(|e| OtherError { msg: e.to_string() })?;
+    Ok(warp::reply::json(&res).into_response())
+}
+
+pub async fn process_line(
+    srv: &tokio::sync::RwLockReadGuard<'_, Service>,
+    ctx: &mut WorkContext,
+) -> anyhow::Result<()> {
+    srv.embedder.process(ctx).await?;
+    srv.onnx.process(ctx).await?;
+    srv.tag_mapper.process(ctx).await?;
+    srv.clitics.process(ctx).await?;
+    srv.static_words.process(ctx).await?;
+    srv.lemmatize_words_mapper.process(ctx).await?;
+    srv.restorer.process(ctx).await?;
+    Ok(())
+}
+
+pub fn map_res(ctx: WorkContext) -> anyhow::Result<Vec<Word>> {
+    let mut res = Vec::<Word>::new();
     for sentence in ctx.sentences {
-        let mut res_sentence = Vec::<Word>::new();
         for word in sentence {
-            res_sentence.push(Word {
+            res.push(Word {
                 w: Some(word.w),
                 mi: word.mi,
                 lemma: word.lemma,
@@ -106,7 +99,7 @@ pub async fn handler(
                 },
             });
         }
-        res_sentence.push(Word {
+        res.push(Word {
             w_type: Some("SENTENCE_END".to_string()),
             w: None,
             mi: None,
@@ -116,10 +109,8 @@ pub async fn handler(
             predicted_str: None,
             mis: None,
         });
-        res.push(res_sentence);
     }
-
-    Ok(warp::reply::json(&res).into_response())
+    Ok(res)
 }
 
 fn is_wanted(debug: &Option<String>, arg: &str) -> Option<bool> {
