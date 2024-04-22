@@ -134,6 +134,13 @@ impl LemmatizeWordsMapper {
         };
         let body = response.bytes().await?;
         let body_str = String::from_utf8_lossy(&body);
+        if body_str.starts_with("N�ra �od�io") {
+            log::warn!("failed to make request: {}", body_str);
+            return Ok(Some(vec![WorkMI {
+                lemma: None,
+                mi: Some(fix_empty_lemma_res(key)),
+            }]));
+        }
         Err(anyhow::anyhow!("failed to make request: {}", body_str))?
     }
 }
