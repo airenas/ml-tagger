@@ -6,3 +6,4 @@ pub mod tags;
 pub mod restorer;
 pub mod static_words;
 pub mod lex;
+pub mod metrics;

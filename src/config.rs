@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use byte_unit::Byte;
 use clap::ArgMatches;
 
 pub struct Config {
@@ -71,17 +70,19 @@ impl Config {
             .into_string()
             .map_err(|e| -> String { format!("can't prepare file: {e:?}") })?;
         let embeddings_cache = match args.get_one::<String>("embeddings_cache") {
-            Some(v) => Byte::parse_str(v.trim(), true)
+            Some(v) => v
+                .trim()
+                .parse::<u64>()
                 .map_err(|e| -> String { format!("can't parse embeddings_cache: `{v}`, {e}") }),
             None => Err(String::from("no embeddings_cache provided")),
-        }?
-        .as_u64();
+        }?;
         let lemma_cache: u64 = match args.get_one::<String>("lemma_cache") {
-            Some(v) => Byte::parse_str(v.trim(), true)
+            Some(v) => v
+                .trim()
+                .parse::<u64>()
                 .map_err(|e| -> String { format!("can't parse lemma_cache: `{v}`, {e}") }),
             None => Err(String::from("no lemma_cache provided")),
-        }?
-        .as_u64();
+        }?;
         Ok(Config {
             port,
             version: "dev".to_string(),

@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::{Error, Ok};
 use async_trait::async_trait;
 use moka::future::Cache;
-use moka::policy::EvictionPolicy;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
@@ -41,14 +40,10 @@ struct LemmaResponse {
 }
 
 impl LemmatizeWordsMapper {
-    pub fn new(url_str: &str, cache_size: u64) -> anyhow::Result<LemmatizeWordsMapper> {
-        log::info!("lemma cache: {cache_size}b");
-        let cache: Cache<String, Arc<Vec<WorkMI>>> = Cache::builder()
-            .max_capacity(cache_size)
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            // .time_to_live(Duration::from_secs(60*60*24))
-            .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
-            .build();
+    pub fn new(
+        url_str: &str,
+        cache: Cache<String, Arc<Vec<WorkMI>>>,
+    ) -> anyhow::Result<LemmatizeWordsMapper> {
         if !url_str.contains("{}") {
             return Err(anyhow::anyhow!(
                 "lemma url {} does not contain {{}}",

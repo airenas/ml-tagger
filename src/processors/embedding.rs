@@ -1,9 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Ok;
 use async_trait::async_trait;
 use fasttext::FastText;
-use moka::{future::Cache, policy::EvictionPolicy};
+use moka::future::Cache;
 
 use crate::{
     handlers::data::{Processor, WorkContext},
@@ -16,19 +16,12 @@ pub struct FastTextWrapper {
 }
 
 impl FastTextWrapper {
-    pub fn new(file: &str, cache_size: u64) -> anyhow::Result<FastTextWrapper> {
+    pub fn new(file: &str, cache: Cache<String, Arc<Vec<f32>>>) -> anyhow::Result<FastTextWrapper> {
         let _perf_log = PerfLogger::new("fast text loader");
         let mut model = FastText::new();
         log::info!("Loading FastText from {}", file);
         model.load_model(file).map_err(anyhow::Error::msg)?;
         log::info!("Loaded FastText dim {}", model.get_dimension(),);
-        log::info!("embedding cache: {cache_size}b");
-        let cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
-            .max_capacity(cache_size)
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            // .time_to_live(Duration::from_secs(60*60*24))
-            .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
-            .build();
         let res = FastTextWrapper { model, cache };
         Ok(res)
     }

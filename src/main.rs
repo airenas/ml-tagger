@@ -1,13 +1,18 @@
 mod config;
 
 use clap::Arg;
-use ml_tagger::handlers::data::{self, Service, TagParams};
+use ml_tagger::handlers::data::{self, Service, TagParams, WorkMI};
 use ml_tagger::handlers::{self, errors};
 use ml_tagger::processors;
+use ml_tagger::processors::metrics::Metrics;
 use ml_tagger::utils::perf::PerfLogger;
+use moka::future::Cache;
+use moka::policy::EvictionPolicy;
 use std::process;
+use std::time::Duration;
 use std::{error::Error, sync::Arc};
 use tokio::sync::RwLock;
+use tokio::time;
 use tokio_util::sync::CancellationToken;
 use warp::Filter;
 
@@ -28,6 +33,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log::info!("Starting ML Tagger service");
     log::info!("Version      : {}", cfg.version);
     log::info!("Port         : {}", cfg.port);
+    log::info!("Embeddings cache : {}", cfg.embeddings_cache);
+    log::info!("Lemmas cache     : {}", cfg.lemma_cache);
 
     let cancel_token = CancellationToken::new();
 
@@ -49,7 +56,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let lexer = processors::lex::Lexer::new(&cfg.lex_url)?;
     let boxed_lexer: Box<dyn data::Processor + Send + Sync> = Box::new(lexer);
 
-    let embedder = processors::embedding::FastTextWrapper::new(&cfg.embeddings, cfg.embeddings_cache)?;
+    let embeddigs_cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
+        .max_capacity(cfg.embeddings_cache)
+        .eviction_policy(EvictionPolicy::tiny_lfu())
+        .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
+        .build();
+    let lemma_cache: Cache<String, Arc<Vec<WorkMI>>> = Cache::builder()
+        .max_capacity(cfg.lemma_cache)
+        .eviction_policy(EvictionPolicy::tiny_lfu())
+        .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
+        .build();
+
+    let embedder =
+        processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
 
     let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
@@ -58,7 +77,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
 
-    let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url, cfg.lemma_cache)?;
+    let lw_mapper =
+        processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url, lemma_cache.clone())?;
     let boxed_lw_mapper: Box<dyn data::Processor + Send + Sync> = Box::new(lw_mapper);
 
     let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
@@ -99,11 +119,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .and(json_body())
         .and(with_service(srv.clone()))
         .and_then(handlers::tag_parsed::handler);
+    let metrics_route = warp::get()
+        .and(warp::path("metrics"))
+        .and_then(handlers::metrics::handler);
+
+    let metrics = Metrics::new(vec!["/tag-parsed".to_string(), "/tag".to_string()])?;
+    let cp_metrics = metrics.clone();
 
     let routes = live_route
+        .or(metrics_route)
         .or(tag_parsed_route)
         .or(tag_route)
         .with(warp::cors().allow_any_origin())
+        .with(warp::log::custom(move |log| cp_metrics.observe(log)))
         .recover(errors::handle_rejection);
 
     let ct = cancel_token.clone();
@@ -112,9 +140,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ct.cancelled().await;
         });
 
+    let ct = cancel_token.clone();
+    let timer = tokio::task::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(5));
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    log::debug!("check timer");
+                    metrics.observe_cache("embeddings", embeddigs_cache.entry_count());
+                    metrics.observe_cache("lemma", lemma_cache.entry_count());
+                },
+                _ = ct.cancelled() => {
+                    break
+                }
+            }
+        }
+        log::info!("finished cache check timer");
+    });
+
     std::mem::drop(_perf_log);
     log::info!("Serving. waiting for server to finish");
     tokio::task::spawn(server).await.unwrap_or_else(|err| {
+        log::error!("{err}");
+        process::exit(1);
+    });
+    timer.await.unwrap_or_else(|err| {
         log::error!("{err}");
         process::exit(1);
     });
@@ -128,7 +178,6 @@ fn with_service(
 ) -> impl Filter<Extract = (Arc<RwLock<Service>>,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || srv.clone())
 }
-
 
 fn json_body() -> impl Filter<Extract = (Vec<Vec<String>>,), Error = warp::Rejection> + Clone {
     warp::body::content_length_limit(1024 * 1024).and(warp::body::json())
@@ -204,8 +253,8 @@ fn app_config() -> Result<Config, String> {
                 .long("embeddings_cache")
                 .value_name("EMBEDDINGS_CACHE")
                 .env("EMBEDDINGS_CACHE")
-                .default_value("100MB")
-                .help("Bytes for embeddings cache")
+                .default_value("50000")
+                .help("Max items for embeddings cache")
                 .required(false),
         )
         .arg(
@@ -213,8 +262,8 @@ fn app_config() -> Result<Config, String> {
                 .long("lemma_cache")
                 .value_name("LEMMA_CACHE")
                 .env("LEMMA_CACHE")
-                .default_value("100MB")
-                .help("Bytes for lemma cache")
+                .default_value("100000")
+                .help("Max items for lemma cache")
                 .required(false),
         )
         .get_matches();
