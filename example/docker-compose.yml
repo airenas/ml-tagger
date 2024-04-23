@@ -11,8 +11,8 @@ services:
       - EMBEDDINGS_FILE=/data/models/tm-0.1/delfi_cbow.bin
       - ONNX_FILE=/data/models/tm-0.1/model.onnx
       - LEMMA_URL=http://lemma:8000/analyze/{}
-      - LEMMA_CACHE=10MB
-      - EMBEDDINGS_CACHE=20MB
+      - LEMMA_CACHE=70000
+      - EMBEDDINGS_CACHE=50000
       - LEX_URL=http://lex:8080/
     # restart: unless-stopped
     ports:
