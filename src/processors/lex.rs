@@ -27,10 +27,12 @@ struct LexResponse {
     // p: Vec<Vec<i32>>,
 }
 
+const ADDITIONAL_SPLITTERS: &str = "-‘\"–‑/:;`−≤≥⁰'";
+
 impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
         log::info!("lex url: {url_str}");
-        let additional_split = HashSet::from_iter("-‘\"–‑/:;`−≤≥⁰'".chars());
+        let additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
 
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
@@ -136,14 +138,20 @@ fn get_string(
     if strings::is_email(s.as_str()) {
         return vec![s];
     }
+    try_split(&chars, additional_split)
+}
+
+fn try_split(chars: &[char], additional_split: &HashSet<char>) -> Vec<String> {
     let mut res = Vec::<String>::new();
     let mut last = 0;
-    for (index, matched) in s.match_indices(|c: char| additional_split.contains(&c)) {
-        if last != index {
-            res.push(chars[last..index].iter().collect());
+    for (index, ch) in chars.iter().enumerate() {
+        if additional_split.contains(ch) {
+            if last != index {
+                res.push(chars[last..index].iter().collect());
+            }
+            res.push(ch.to_string());
+            last = index + 1;
         }
-        res.push(matched.to_string());
-        last = index + matched.len();
     }
     if last < chars.len() {
         res.push(chars[last..].iter().collect());
@@ -195,4 +203,40 @@ impl Processor for Lexer {
 
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn test_try_split(input: &str, expected: Vec<String>) {
+        let chars: Vec<char> = input.chars().collect();
+        let additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
+        assert_eq!(try_split(&chars, &additional_split), expected);
+    }
+
+    macro_rules! try_split_test {
+        ($suite:ident, $($name:ident: $input:expr, $expected:expr,)*) => {
+            mod $suite {
+                use super::*;
+                $(
+                    #[test]
+                    fn $name() {
+                        test_try_split($input, $expected);
+                    }
+                )*
+            }
+        }
+    }
+
+    try_split_test!(split_word,
+        no_split: "olia", vec!["olia".to_string()],
+        split1: "olia-olia", vec!["olia".to_string(), "-".to_string(), "olia".to_string()],
+        split_several: "olia-olia-2", vec!["olia".to_string(), "-".to_string(), "olia".to_string(),"-".to_string(), "2".to_string()],
+        split_lt: "dvidešimtį-dvi", vec!["dvidešimtį".to_string(), "-".to_string(), "dvi".to_string()],
+        split_other: "dvidešimtį≤≥⁰dvi", vec!["dvidešimtį".to_string(), "≤".to_string(),"≥".to_string(),"⁰".to_string(), "dvi".to_string()],
+        split_last: "dvidešimtį-", vec!["dvidešimtį".to_string(), "-".to_string()],
+        split_first: "-dvi", vec!["-".to_string(), "dvi".to_string()],
+    );
 }
