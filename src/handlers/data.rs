@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use warp::Rejection;
@@ -21,7 +23,7 @@ pub struct WorkWord {
     pub mi: Option<String>,
     pub lemma: Option<String>,
     pub w_type: Option<String>,
-    pub embeddings: Option<Vec<f32>>,
+    pub embeddings: Option<Arc<Vec<f32>>>,
     pub predicted: Option<i32>,
     pub predicted_str: Option<String>,
     pub mis: Option<Vec<WorkMI>>,

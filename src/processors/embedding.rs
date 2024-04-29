@@ -38,16 +38,15 @@ impl Processor for FastTextWrapper {
                     let emb = self.cache.get(w).await;
                     if let Some(val) = emb {
                         log::debug!("in emb cache: {w}");
-                        let new_value = Arc::clone(&val);
-                        let extracted = (*new_value).clone();
-                        word_info.embeddings = Some(extracted);
+                        word_info.embeddings = Some(val);
                     } else {
                         let embedding = self
                             .model
                             .get_word_vector(&word_info.w)
                             .map_err(anyhow::Error::msg)?;
-                        word_info.embeddings = Some(embedding.clone());
-                        self.cache.insert(w.clone(), Arc::new(embedding)).await;
+                        let val = Arc::new(embedding);
+                        word_info.embeddings = Some(val.clone());
+                        self.cache.insert(w.clone(), val).await;
                     }
                 }
             }

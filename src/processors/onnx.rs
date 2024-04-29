@@ -62,7 +62,7 @@ impl Processor for OnnxWrapper {
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
                     match &word_info.embeddings {
-                        Some(emb) => combined_data.extend(emb),
+                        Some(emb) => combined_data.extend(emb.iter()),
                         None => {}
                     }
                     cw += 1;

@@ -70,7 +70,7 @@ pub fn map_res(ctx: WorkContext) -> anyhow::Result<Vec<Word>> {
                 lemma: word.lemma,
                 w_type: word.w_type,
                 embeddings: match is_wanted(&ctx.params.debug, "emb:") {
-                    Some(true) => word.embeddings,
+                    Some(true) => word.embeddings.map(|arc| Arc::clone(&arc).to_vec()),
                     _ => None,
                 },
                 predicted: match is_wanted(&ctx.params.debug, "predicted:") {
