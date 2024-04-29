@@ -9,30 +9,43 @@ use crate::utils::perf::PerfLogger;
 use crate::utils::strings::is_number;
 
 pub struct StaticWords {
-    vocab: HashMap<String, String>,
+    vocab: HashMap<String, Arc<Vec<WorkMI>>>,
 }
 
 impl StaticWords {
     pub fn new() -> anyhow::Result<StaticWords> {
         let _perf_log = PerfLogger::new("init static mi map");
-        let vocab = init_vocab()?;
-        log::info!("loaded clitics len {}", vocab.len());
+        let loaded_vocab = init_vocab()?;
+        log::info!("loaded clitics len {}", loaded_vocab.len());
+
+        let mut vocab: HashMap<String, Arc<Vec<WorkMI>>> = HashMap::new();
+        for (key, value) in loaded_vocab {
+            let v = to_word_mi(value.as_str());
+            vocab.insert(key, v);
+        }
         let res = StaticWords { vocab };
         Ok(res)
     }
 
-    fn try_find(&self, w: &str) -> Option<String> {
+    fn try_find(&self, w: &str) -> Option<Arc<Vec<WorkMI>>> {
         if is_number(w) {
-            return Some("M----d-".to_string());
+            return Some(to_word_mi("M----d-"));
         }
         if let Some(s) = self.vocab.get(w) {
             return Some(s.clone());
         }
         if starts_with_nonalpha_num(w) {
-            return Some("X-".to_string());
+            return Some(to_word_mi("X-"));
         }
         None
     }
+}
+
+fn to_word_mi(s: &str) -> Arc<Vec<WorkMI>> {
+    Arc::new(vec![WorkMI {
+        lemma: None,
+        mi: Some(s.to_string()),
+    }])
 }
 
 fn starts_with_nonalpha_num(w: &str) -> bool {
@@ -47,12 +60,7 @@ impl Processor for StaticWords {
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 if word_info.is_word && word_info.mis.is_none() {
-                    if let Some(res) = self.try_find(&word_info.w.to_lowercase()) {
-                        word_info.mis = Some(Arc::new(vec![WorkMI {
-                            lemma: None,
-                            mi: Some(res),
-                        }]));
-                    }
+                    word_info.mis = self.try_find(&word_info.w.to_lowercase());
                 }
             }
         }
@@ -103,9 +111,12 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    fn test_try_find(input: &str, expected: Option<String>) {
+    fn test_try_find(input: &str, expected: Vec<String>) {
         let p = StaticWords::new().unwrap();
-        let res = p.try_find(input);
+        let mut res: Vec<String> = Vec::new();
+        for v in p.try_find(input).unwrap().iter().cloned() {
+            res.push(v.mi.unwrap());
+        }
         assert_eq!(res, expected);
     }
 
@@ -124,10 +135,10 @@ mod tests {
     }
 
     try_find_test!(try_find_scope,
-        number: "10", Some("M----d-".to_string()),
-        coma: ",", Some("Tc".to_string()),
-        dot: ".", Some("Tp".to_string()),
-        some: "=", Some("X-".to_string()),
-        with_dor: ".olia", Some("X-".to_string()),
+        number: "10", vec!["M----d-".to_string()],
+        coma: ",", vec!["Tc".to_string()],
+        dot: ".", vec!["Tp".to_string()],
+        some: "=", vec!["X-".to_string()],
+        with_dor: ".olia", vec!["X-".to_string()],
     );
 }
