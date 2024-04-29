@@ -68,16 +68,14 @@ impl LemmatizeWordsMapper {
 
     async fn lemmatize(
         &self,
-        map: &mut HashMap<String, Option<Vec<WorkMI>>>,
+        map: &mut HashMap<String, Option<Arc<Vec<WorkMI>>>>,
     ) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lemmatizing");
         for (key, value) in map.iter_mut() {
             let cv = self.cache.get(key).await;
             if let Some(val) = cv {
                 log::debug!("in lemma cache: {key}");
-                let new_value = Arc::clone(&val);
-                let extracted = (*new_value).clone();
-                *value = Some(extracted);
+                *value = Some(val);
             }
         }
         for (key, value) in map.iter_mut() {
@@ -87,8 +85,9 @@ impl LemmatizeWordsMapper {
                     .await
                     .map_err(|err| anyhow::anyhow!("lemma failure: {}", err))?;
                 if let Some(val) = new_value {
-                    *value = Some(val.clone());
-                    self.cache.insert(key.clone(), Arc::new(val)).await;
+                    let a_val = Arc::new(val);
+                    *value = Some(a_val.clone());
+                    self.cache.insert(key.clone(), a_val).await;
                 }
             }
         }
@@ -154,7 +153,7 @@ fn fix_empty_lemma_res(word: &str) -> String {
 impl Processor for LemmatizeWordsMapper {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lemmatize words");
-        let mut words_map: HashMap<String, Option<Vec<WorkMI>>> = HashMap::new();
+        let mut words_map: HashMap<String, Option<Arc<Vec<WorkMI>>>> = HashMap::new();
 
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {

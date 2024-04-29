@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Ok;
 use async_trait::async_trait;
@@ -47,10 +48,10 @@ impl Processor for StaticWords {
             for word_info in sent.iter_mut() {
                 if word_info.is_word && word_info.mis.is_none() {
                     if let Some(res) = self.try_find(&word_info.w.to_lowercase()) {
-                        word_info.mis = Some(vec![WorkMI {
+                        word_info.mis = Some(Arc::new(vec![WorkMI {
                             lemma: None,
                             mi: Some(res),
-                        }]);
+                        }]));
                     }
                 }
             }

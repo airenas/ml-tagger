@@ -26,7 +26,7 @@ pub struct WorkWord {
     pub embeddings: Option<Arc<Vec<f32>>>,
     pub predicted: Option<i32>,
     pub predicted_str: Option<String>,
-    pub mis: Option<Vec<WorkMI>>,
+    pub mis: Option<Arc<Vec<WorkMI>>>,
 }
 
 #[async_trait]

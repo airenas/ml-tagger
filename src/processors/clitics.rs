@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::sync::Arc;
 
 use anyhow::Ok;
 use async_trait::async_trait;
@@ -31,14 +32,14 @@ impl Processor for Clitics {
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
                     if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {
-                        word_info.mis = Some(
+                        word_info.mis = Some(Arc::new(
                             res.iter()
                                 .map(|f| WorkMI {
                                     mi: Some(f.clone()),
                                     lemma: None,
                                 })
                                 .collect(),
-                        );
+                        ));
                     }
                 }
             }
