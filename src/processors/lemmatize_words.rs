@@ -9,6 +9,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
+use url::form_urlencoded;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
 use crate::utils::perf::PerfLogger;
@@ -96,7 +97,7 @@ impl LemmatizeWordsMapper {
 
     async fn make_request(&self, key: &str) -> anyhow::Result<Option<Vec<WorkMI>>> {
         let _perf_log = PerfLogger::new(format!("lemmatize '{}'", key).as_str());
-        let url_str = self.url.replace("{}", key);
+        let url_str = make_url(self.url.as_str(), key);
         log::info!("call: {url_str}");
         let response = self
             .client
@@ -137,6 +138,11 @@ impl LemmatizeWordsMapper {
         }
         Err(anyhow::anyhow!("failed to make request: {}", body_str))?
     }
+}
+
+fn make_url(path_str: &str, w: &str) -> String {
+    let enc = form_urlencoded::byte_serialize(w.as_bytes()).collect::<String>();
+    path_str.replace("{}", &enc)
 }
 
 fn fix_empty_lemma_res(word: &str) -> String {
@@ -202,5 +208,18 @@ mod tests {
         assert_eq!(fix_empty_lemma_res("ą"), "Xr".to_string(), "test ą");
         assert_eq!(fix_empty_lemma_res("š"), "Xr".to_string());
         assert_eq!(fix_empty_lemma_res("ss"), "X-".to_string());
+    }
+
+    #[test]
+    fn test_make_url() {
+        assert_eq!(make_url("olia/{}", "aaa"), "olia/aaa".to_string());
+        assert_eq!(
+            make_url("http://olia/{}", "10%"),
+            "http://olia/10%25".to_string()
+        );
+        assert_eq!(
+            make_url("http://olia/{}", "ąišę"),
+            "http://olia/%C4%85i%C5%A1%C4%99".to_string()
+        );
     }
 }
