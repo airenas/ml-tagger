@@ -37,6 +37,9 @@ impl StaticWords {
         if starts_with_nonalpha_num(w) {
             return Some(to_word_mi("X-"));
         }
+        if w.len()  > 1 && w.contains('%') {
+            return Some(to_word_mi("X-"));
+        }
         None
     }
 }
@@ -139,6 +142,9 @@ mod tests {
         coma: ",", vec!["Tc".to_string()],
         dot: ".", vec!["Tp".to_string()],
         some: "=", vec!["X-".to_string()],
-        with_dor: ".olia", vec!["X-".to_string()],
+        with_dot: ".olia", vec!["X-".to_string()],
+        with_percent: "olia%", vec!["X-".to_string()],
+        with_percent_middle: "oli%a", vec!["X-".to_string()],
+        with_percent_start: "%olia", vec!["X-".to_string()],
     );
 }
