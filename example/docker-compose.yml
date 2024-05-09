@@ -7,9 +7,9 @@ services:
       - SEGMENTATION_URL=http://lex:8080/
       - RUST_LOG=INFO,onnxruntime_ng=ERROR
       - ONNX_THREADS=4
-      - DATA_DIR=/data/models/tm-0.1
-      - EMBEDDINGS_FILE=/data/models/tm-0.1/delfi_cbow.bin
-      - ONNX_FILE=/data/models/tm-0.1/model.onnx
+      - DATA_DIR=/data/models/${MODEL}
+      - EMBEDDINGS_FILE=/data/models/${MODEL}/delfi_cbow.bin
+      - ONNX_FILE=/data/models/${MODEL}/model.onnx
       - LEMMA_URL=http://lemma:8000/analyze/{}
       - LEMMA_CACHE=70000
       - EMBEDDINGS_CACHE=50000
