@@ -19,6 +19,7 @@ use warp::Filter;
 use clap::Command;
 use config::Config;
 use tokio::signal::unix::{signal, SignalKind};
+use ulid::Ulid;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -122,6 +123,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let metrics_route = warp::get()
         .and(warp::path("metrics"))
         .and_then(handlers::metrics::handler);
+    let l_cache_clone = lemma_cache.clone();
+    let e_cache_clone = embeddigs_cache.clone();
+
+    let cache_key = if cfg.cache_key.is_empty() {
+        let ulid = Ulid::new();
+        ulid.to_string()
+    } else {
+        cfg.cache_key.clone()
+    };
+
+    let cache_path = format!("clean-cache/{}", cache_key);
+    log::info!("clean cache path: {}", cache_path);
+
+    let clean_cache_route = warp::post()
+        .and(warp::path("clean-cache")).and(warp::path(cache_key))
+        .and(warp::any().map(move || l_cache_clone.clone()))
+        .and(warp::any().map(move || e_cache_clone.clone()))
+        .and_then(handlers::clean_cache::handler);
 
     let metrics = Metrics::new(vec!["/tag-parsed".to_string(), "/tag".to_string()])?;
     let cp_metrics = metrics.clone();
@@ -130,13 +149,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or(metrics_route)
         .or(tag_parsed_route)
         .or(tag_route)
+        .or(clean_cache_route);
+    
+    let final_routes = routes
         .with(warp::cors().allow_any_origin())
         .with(warp::log::custom(move |log| cp_metrics.observe(log)))
         .recover(errors::handle_rejection);
 
     let ct = cancel_token.clone();
     let (_, server) =
-        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], cfg.port), async move {
+        warp::serve(final_routes).bind_with_graceful_shutdown(([0, 0, 0, 0], cfg.port), async move {
             ct.cancelled().await;
         });
 
@@ -264,6 +286,15 @@ fn app_config() -> Result<Config, String> {
                 .env("LEMMA_CACHE")
                 .default_value("100000")
                 .help("Max items for lemma cache")
+                .required(false),
+        )
+        .arg(
+            Arg::new("cache_key")
+                .long("cache_key")
+                .value_name("CACHE_KEY")
+                .env("CACHE_KEY")
+                .default_value("")
+                .help("Key for cache cleaning")
                 .required(false),
         )
         .get_matches();

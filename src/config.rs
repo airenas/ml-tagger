@@ -16,6 +16,7 @@ pub struct Config {
     pub onnx_threads: i16,
     pub embeddings_cache: u64,
     pub lemma_cache: u64,
+    pub cache_key: String,
 }
 
 impl Config {
@@ -53,6 +54,10 @@ impl Config {
                 .parse::<i16>()
                 .map_err(|e| -> String { format!("can't parse onnx_threads: `{v}`, {e}") }),
             None => Err(String::from("no onnx_threads provided")),
+        }?;
+        let cache_key = match args.get_one::<String>("cache_key") {
+            Some(v) => Ok(v),
+            None => Err("no cache_key"),
         }?;
         let clitics = Path::new(data_dir)
             .join("clitics")
@@ -97,6 +102,7 @@ impl Config {
             onnx_threads,
             embeddings_cache,
             lemma_cache,
+            cache_key: cache_key.to_string(),
         })
     }
 }
