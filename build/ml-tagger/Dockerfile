@@ -1,7 +1,7 @@
 #########################################################################################
 ## docker will invoke this file from ../.. dir in order to access code
 #########################################################################################
-FROM rust:1.77-buster as builder
+FROM rust:1.77-buster AS builder
 
 # RUN apk --update add openssl-dev musl-dev
 
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 RUN mkdir -p /onnx && find /src/target/ -name "*libonnxruntime.so.*" -exec cp "{}" /onnx/ \;
 #########################################################################################
-FROM debian:buster-slim as runner
+FROM debian:buster-slim AS runner
 
 RUN apt-get update && apt-get -y install openssl ca-certificates
 
