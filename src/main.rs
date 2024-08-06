@@ -1,5 +1,6 @@
 mod config;
 
+use chrono::NaiveDateTime;
 use clap::Arg;
 use ml_tagger::handlers::data::{self, Service, TagParams, WorkMI};
 use ml_tagger::handlers::{self, errors};
@@ -78,8 +79,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
 
-    let lw_mapper =
-        processors::lemmatize_words::LemmatizeWordsMapper::new(&cfg.lemma_url, lemma_cache.clone())?;
+    let lw_mapper = processors::lemmatize_words::LemmatizeWordsMapper::new(
+        &cfg.lemma_url,
+        lemma_cache.clone(),
+    )?;
     let boxed_lw_mapper: Box<dyn data::Processor + Send + Sync> = Box::new(lw_mapper);
 
     let clitics = processors::clitics::Clitics::new(&cfg.clitics)?;
@@ -137,7 +140,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log::info!("clean cache path: {}", cache_path);
 
     let clean_cache_route = warp::post()
-        .and(warp::path("clean-cache")).and(warp::path(cache_key))
+        .and(warp::path("clean-cache"))
+        .and(warp::path(cache_key))
         .and(warp::any().map(move || l_cache_clone.clone()))
         .and(warp::any().map(move || e_cache_clone.clone()))
         .and_then(handlers::clean_cache::handler);
@@ -150,27 +154,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or(tag_parsed_route)
         .or(tag_route)
         .or(clean_cache_route);
-    
+
     let final_routes = routes
         .with(warp::cors().allow_any_origin())
         .with(warp::log::custom(move |log| cp_metrics.observe(log)))
         .recover(errors::handle_rejection);
 
     let ct = cancel_token.clone();
-    let (_, server) =
-        warp::serve(final_routes).bind_with_graceful_shutdown(([0, 0, 0, 0], cfg.port), async move {
+    let (_, server) = warp::serve(final_routes).bind_with_graceful_shutdown(
+        ([0, 0, 0, 0], cfg.port),
+        async move {
             ct.cancelled().await;
-        });
+        },
+    );
 
     let ct = cancel_token.clone();
+    let embeddigs_cache_clone = embeddigs_cache.clone();
+    let lemma_cache_clone = lemma_cache.clone();
     let timer = tokio::task::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(5));
         loop {
             tokio::select! {
                 _ = interval.tick() => {
                     log::debug!("check timer");
-                    metrics.observe_cache("embeddings", embeddigs_cache.entry_count());
-                    metrics.observe_cache("lemma", lemma_cache.entry_count());
+                    metrics.observe_cache("embeddings", embeddigs_cache_clone.entry_count());
+                    metrics.observe_cache("lemma", lemma_cache_clone.entry_count());
                 },
                 _ = ct.cancelled() => {
                     break
@@ -178,6 +186,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         log::info!("finished cache check timer");
+    });
+
+    let ct = cancel_token.clone();
+    let cache_timer = tokio::task::spawn(async move {
+        loop {
+            let after = get_next_clear_run();
+            log::info!("next clear cache after: {:?}", after);
+            tokio::select! {
+                _ = time::sleep(after) => {
+                    log::info!("clear cache");
+                    embeddigs_cache.invalidate_all();
+                    lemma_cache.invalidate_all();
+                },
+                _ = ct.cancelled() => {
+                    break
+                }
+            }
+        }
+        log::info!("finished cache clear timer");
     });
 
     std::mem::drop(_perf_log);
@@ -190,9 +217,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         log::error!("{err}");
         process::exit(1);
     });
+    cache_timer.await.unwrap_or_else(|err| {
+        log::error!("{err}");
+        process::exit(1);
+    });
 
     log::info!("Bye");
     Ok(())
+}
+
+fn get_next_clear_run() -> time::Duration {
+    let now = chrono::Local::now().naive_utc();
+    let today = now.date();
+    let mut next_day_3_am =
+        NaiveDateTime::new(today, chrono::NaiveTime::from_hms_opt(3, 0, 0).unwrap());
+    if now > next_day_3_am {
+        next_day_3_am += chrono::Duration::days(1);
+    }
+    next_day_3_am.signed_duration_since(now).to_std().unwrap()
 }
 
 fn with_service(
