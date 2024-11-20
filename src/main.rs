@@ -69,12 +69,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
         .build();
 
+    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
+    let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
+
     let embedder =
         processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
     let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
-
-    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
-    let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
     let tags = processors::tags::TagsMapper::new(&cfg.tags)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
