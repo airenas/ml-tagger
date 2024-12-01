@@ -14,12 +14,12 @@ use crate::utils::perf::PerfLogger;
 pub struct OnnxWrapper {
     // environment: Environment,
     // model_bytes: Vec<u8>,
-    threads: i16,
+    threads: u16,
     model: Session,
 }
 
 impl OnnxWrapper {
-    pub fn new(file_str: &str, threads: i16) -> anyhow::Result<OnnxWrapper> {
+    pub fn new(file_str: &str, threads: u16) -> anyhow::Result<OnnxWrapper> {
         match env::var("LD_LIBRARY_PATH") {
             Ok(value) => log::info!("LD_LIBRARY_PATH: {}", value),
             Err(_) => log::warn!("LD_LIBRARY_PATH env var not found"),

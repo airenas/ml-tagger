@@ -1,11 +1,11 @@
 use std::path::Path;
 
 pub fn make_file_path(dir: &str, file: &str) -> anyhow::Result<String> {
-        Path::new(dir)
-            .join(file)
-            .into_os_string()
-            .into_string()
-            .map_err(|e| anyhow::anyhow!("can't prepare file {file}: {e:?}"))
+    Path::new(dir)
+        .join(file)
+        .into_os_string()
+        .into_string()
+        .map_err(|e| anyhow::anyhow!("can't prepare file {file}: {e:?}"))
 }
 
 #[cfg(test)]
@@ -21,4 +21,3 @@ mod tests {
         assert_eq!(res.unwrap(), "/tmp/test.txt");
     }
 }
-

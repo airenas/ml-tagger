@@ -2,7 +2,7 @@ mod config;
 
 use chrono::NaiveDateTime;
 use clap::Parser;
-use ml_tagger::config::make_file_path;
+use config::make_file_path;
 use ml_tagger::handlers::data::{self, Service, TagParams, WorkMI};
 use ml_tagger::handlers::{self, errors};
 use ml_tagger::processors::metrics::Metrics;
@@ -10,7 +10,6 @@ use ml_tagger::utils::perf::PerfLogger;
 use ml_tagger::{processors, FN_CLITICS, FN_TAGS, FN_TAGS_FREQ};
 use moka::future::Cache;
 use moka::policy::EvictionPolicy;
-use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -122,9 +121,19 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     // let onnx = processors::ts::TSWrapper::new()?;
     let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
-    let embedder =
-        processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
-    let boxed_embedder: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
+    let boxed_embedder = if cfg.embeddings.ends_with(".fifu") {
+        let embedder = processors::embedding_ff::FinalFusionWrapper::new(
+            &cfg.embeddings,
+            embeddigs_cache.clone(),
+        )?;
+        let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
+        be
+    } else {
+        let embedder =
+            processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
+        let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
+        be
+    };
 
     let tags = processors::tags::TagsMapper::new(&make_file_path(&cfg.data_dir, FN_TAGS)?)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);
@@ -141,7 +150,8 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     let statics = processors::static_words::StaticWords::new()?;
     let boxed_statics: Box<dyn data::Processor + Send + Sync> = Box::new(statics);
 
-    let restorer = processors::restorer::Restorer::new(&make_file_path(&cfg.data_dir, FN_TAGS_FREQ)?)?;
+    let restorer =
+        processors::restorer::Restorer::new(&make_file_path(&cfg.data_dir, FN_TAGS_FREQ)?)?;
     let boxed_restorer: Box<dyn data::Processor + Send + Sync> = Box::new(restorer);
 
     let srv = Arc::new(RwLock::new(Service {
@@ -226,7 +236,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    log::debug!("check timer");
+                    tracing::trace!("check timer");
                     metrics.observe_cache("embeddings", embeddigs_cache_clone.entry_count());
                     metrics.observe_cache("lemma", lemma_cache_clone.entry_count());
                 },
@@ -235,14 +245,14 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
                 }
             }
         }
-        log::info!("finished cache check timer");
+        tracing::info!("finished cache check timer");
     });
 
     let ct = cancel_token.clone();
     let cache_timer = tokio::task::spawn(async move {
         loop {
             let after = get_next_clear_run();
-            log::info!("next clear cache after: {:?}", after);
+            tracing::info!(after = format!("{:?}", after), "next clear cache");
             tokio::select! {
                 _ = time::sleep(after) => {
                     log::info!("clear cache");
@@ -254,7 +264,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
                 }
             }
         }
-        log::info!("finished cache clear timer");
+        tracing::info!("finished cache clear timer");
     });
 
     std::mem::drop(_perf_log);
