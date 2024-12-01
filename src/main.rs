@@ -15,6 +15,8 @@ use std::{error::Error, sync::Arc};
 use tokio::sync::RwLock;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use warp::Filter;
 
 use clap::Command;
@@ -22,21 +24,37 @@ use config::Config;
 use tokio::signal::unix::{signal, SignalKind};
 use ulid::Ulid;
 
+// async fn main() -> anyhow::Result<()> {
+//     tracing_subscriber::registry()
+//         .with(tracing_subscriber::EnvFilter::from_default_env())
+//         .with(tracing_subscriber::fmt::Layer::default().compact())
+//         .init();
+//     let args = Args::parse();
+//     if let Err(e) = main_int(args).await {
+//         log::error!("{}", e);
+//         return Err(e);
+//     }
+//     Ok(())
+// }
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let _perf_log = PerfLogger::new("loading service");
-    env_logger::init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::Layer::default().compact())
+        .init();
 
+    let _perf_log = PerfLogger::new("loading service");
     let cfg = app_config().unwrap_or_else(|err| {
         log::error!("problem parsing arguments: {err}");
         process::exit(1)
     });
 
-    log::info!("Starting ML Tagger service");
-    log::info!("Version      : {}", cfg.version);
-    log::info!("Port         : {}", cfg.port);
-    log::info!("Embeddings cache : {}", cfg.embeddings_cache);
-    log::info!("Lemmas cache     : {}", cfg.lemma_cache);
+    tracing::info!("Starting ML Tagger service");
+    tracing::info!(version = cfg.version);
+    tracing::info!(port = cfg.port);
+    tracing::info!(cache = cfg.embeddings_cache);
+    tracing::info!(lemma_cache = cfg.lemma_cache);
 
     let cancel_token = CancellationToken::new();
 
@@ -70,6 +88,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
 
     let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
+    // let onnx = processors::ts::TSWrapper::new()?;
     let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
     let embedder =

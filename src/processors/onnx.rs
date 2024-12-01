@@ -1,14 +1,12 @@
 use ndarray::Array;
+use ort::execution_providers::{
+    CPUExecutionProvider, CUDAExecutionProvider, CoreMLExecutionProvider,
+};
+use ort::session::builder::GraphOptimizationLevel;
+use ort::session::Session;
 use std::env;
-use std::fs::File;
-use std::io::Read;
 
 use async_trait::async_trait;
-// use onnxruntime_ng::{
-//     environment::Environment, ndarray, tensor::OrtOwnedTensor, GraphOptimizationLevel, LoggingLevel,
-// };
-
-use ort::{CUDAExecutionProvider, GraphOptimizationLevel, Session};
 
 use crate::handlers::data::{Processor, WorkContext};
 use crate::utils::perf::PerfLogger;
@@ -28,13 +26,27 @@ impl OnnxWrapper {
         };
         let _perf_log = PerfLogger::new("onnx loader");
 
-        ort::init()
-            .with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
-           .commit()?;
+        // ort::init()
+        //     .with_execution_providers([CPUExecutionProvider::default().build().error_on_failure()])
+        //     .commit()?;
+        // ort::init()
+        //     .with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
+        //     .commit()?;
         log::info!("Loading ONNX model from {}", file_str);
         // let model = Session::builder()?.commit_from_file(file_str)?;
         let model = Session::builder()?
-            .with_optimization_level(GraphOptimizationLevel::Disable)?
+            .with_execution_providers([CPUExecutionProvider::default()
+                // .with_cuda_graph()
+                .build()
+                .error_on_failure()])?
+            // .with_execution_providers([CoreMLExecutionProvider::default()
+            // .with_cpu_only()
+            // this model uses control flow operators, so enable CoreML on subgraphs too
+            // .with_subgraphs()
+            // only use the ANE as the CoreML CPU implementation is super slow for this model
+            // .with_ane_only()
+            // .build()])?
+            .with_optimization_level(GraphOptimizationLevel::Level3)?
             // .with_intra_threads(12)?
             .commit_from_file(file_str)?;
 

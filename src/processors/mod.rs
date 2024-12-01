@@ -7,3 +7,5 @@ pub mod restorer;
 pub mod static_words;
 pub mod lex;
 pub mod metrics;
+pub mod predict;
+pub mod embedding_ff;
