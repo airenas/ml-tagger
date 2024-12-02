@@ -1,13 +1,11 @@
-use std::sync::Arc;
+use axum::{extract, Json};
 
-use tokio::sync::RwLock;
-use warp::Reply;
+use super::data::{ApiResult, LiveResponse};
 
-use super::data::{LiveResponse, Result, Service};
-
-pub async fn handler(srv_wrap: Arc<RwLock<Service>>) -> Result<impl Reply> {
-    log::debug!("live handler");
-    let _srv = srv_wrap.read().await;
-    let res = LiveResponse { status: true };
-    Ok(warp::reply::json(&res).into_response())
+pub async fn handler() -> ApiResult<extract::Json<LiveResponse>> {
+    let res = LiveResponse {
+        status: true,
+        version: env!("CARGO_APP_VERSION").to_string(),
+    };
+    Ok(Json(res))
 }

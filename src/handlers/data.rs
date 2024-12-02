@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use warp::Rejection;
+
+use super::error::ApiError;
 
 pub struct WorkContext {
     pub params: TagParams,
@@ -46,11 +47,12 @@ pub struct Service {
     pub calls: u32,
 }
 
-pub type Result<T> = std::result::Result<T, Rejection>;
+pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct LiveResponse {
     pub status: bool,
+    pub version: String,
 }
 
 #[derive(Deserialize)]

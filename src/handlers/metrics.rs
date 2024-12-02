@@ -1,9 +1,7 @@
-use warp::Reply;
+use super::data::ApiResult;
 
-use super::data::Result;
-
-pub async fn handler() -> Result<impl Reply> {
-    log::debug!("metrics handler");
+pub async fn handler() -> ApiResult<String> {
+    tracing::debug!("metrics handler");
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 

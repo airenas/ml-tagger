@@ -35,16 +35,16 @@ impl Metrics {
         })
     }
 
-    pub fn observe(&self, info: warp::log::Info) {
-        for sp in self.start_path.iter() {
-            if info.path().contains(sp) {
-                self.http_perf
-                    .with_label_values(&[sp, info.status().as_str()])
-                    .observe(info.elapsed().as_secs_f64());
-                return;
-            }
-        }
-    }
+    // pub fn observe(&self, info: warp::log::Info) {
+    //     for sp in self.start_path.iter() {
+    //         if info.path().contains(sp) {
+    //             self.http_perf
+    //                 .with_label_values(&[sp, info.status().as_str()])
+    //                 .observe(info.elapsed().as_secs_f64());
+    //             return;
+    //         }
+    //     }
+    // }
 
     pub fn observe_cache(&self, name: &str, count: u64) {
         self.cache_sizes

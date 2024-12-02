@@ -2,23 +2,30 @@ use std::sync::Arc;
 
 use crate::{
     handlers::{
-        data::{Result, Service, WorkContext, WorkWord},
-        errors::OtherError,
+        data::{Service, WorkContext, WorkWord},
         tag::{map_res, process_line},
     },
     utils::perf::PerfLogger,
 };
+use anyhow::Context;
 use tokio::sync::RwLock;
-use warp::reply::Reply;
 
-use super::data::TagParams;
+use super::data::{ApiResult, TagParams, Word};
 
+use axum::{
+    debug_handler,
+    extract::{self, Query, State},
+    Json,
+};
+
+#[debug_handler]
 pub async fn handler(
-    params: TagParams,
-    input: Vec<Vec<String>>,
-    srv_wrap: Arc<RwLock<Service>>,
-) -> Result<impl Reply> {
+    State(srv_wrap): State<Arc<RwLock<Service>>>,
+    Query(params): Query<TagParams>,
+    Json(input): Json<Vec<Vec<String>>>,
+) -> ApiResult<extract::Json<Vec<Word>>> {
     let _perf_log = PerfLogger::new("tag parsed handler");
+
     let mut ctx = WorkContext::new(params, "".to_string());
     for sentence in input {
         let mut work_sentence = Vec::<WorkWord>::new();
@@ -29,9 +36,7 @@ pub async fn handler(
     }
     let srv = srv_wrap.read().await;
 
-    process_line(&srv, &mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
-    let res = map_res(ctx).map_err(|e| OtherError { msg: e.to_string() })?;
-    Ok(warp::reply::json(&res).into_response())
+    process_line(&srv, &mut ctx).await.context("process")?;
+    let res = map_res(ctx).context("map res")?;
+    Ok(Json(res))
 }

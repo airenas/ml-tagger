@@ -1,10 +1,12 @@
 mod config;
 
+use axum::extract::DefaultBodyLimit;
 use chrono::NaiveDateTime;
 use clap::Parser;
 use config::make_file_path;
-use ml_tagger::handlers::data::{self, Service, TagParams, WorkMI};
-use ml_tagger::handlers::{self, errors};
+use ml_tagger::handlers::clean_cache::CacheData;
+use ml_tagger::handlers::data::{self, Service, WorkMI};
+use ml_tagger::handlers::{self};
 use ml_tagger::processors::metrics::Metrics;
 use ml_tagger::utils::perf::PerfLogger;
 use ml_tagger::{processors, FN_CLITICS, FN_TAGS, FN_TAGS_FREQ};
@@ -12,17 +14,24 @@ use moka::future::Cache;
 use moka::policy::EvictionPolicy;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use warp::Filter;
 
 use tokio::signal::unix::{signal, SignalKind};
 use ulid::Ulid;
 
-/// Sound saver http service
+use axum::{
+    routing::{get, post},
+    Router,
+};
+
+/// ML POS tagger http service
 #[derive(Parser, Debug)]
 #[command(version = env!("CARGO_APP_VERSION"), name = "ml-tagger-ws", about="Service for serving ML based POS tagger", 
     long_about = None, author="Airenas V.<airenass@gmail.com>")]
@@ -96,7 +105,6 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         tokio::select! {
             _ = int_stream.recv() => log::info!("Exit event int"),
             _ = term_stream.recv() => log::info!("Exit event term"),
-            // _ = rx_exit_indicator.recv() => log::info!("Exit event from some loader"),
         }
         tracing::debug!("sending exit event");
         ct.cancel();
@@ -106,7 +114,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     let lexer = processors::lex::Lexer::new(&cfg.lex_url)?;
     let boxed_lexer: Box<dyn data::Processor + Send + Sync> = Box::new(lexer);
 
-    let embeddigs_cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
+    let embeddings_cache: Cache<String, Arc<Vec<f32>>> = Cache::builder()
         .max_capacity(cfg.embeddings_cache)
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
@@ -120,14 +128,14 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     let (boxed_embedder, dims) = if cfg.embeddings.ends_with(".fifu") {
         let embedder = processors::embedding_ff::FinalFusionWrapper::new(
             &cfg.embeddings,
-            embeddigs_cache.clone(),
+            embeddings_cache.clone(),
         )?;
         let dims = embedder.dims();
         let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
         (be, dims)
     } else {
         let embedder =
-            processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
+            processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddings_cache.clone())?;
         let dims = embedder.dims();
         let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
         (be, dims)
@@ -168,28 +176,11 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         lexer: boxed_lexer,
     }));
 
-    let live_route = warp::get()
-        .and(warp::path("live"))
-        .and(with_service(srv.clone()))
-        .and_then(handlers::live::handler);
-    let tag_route = warp::post()
-        .and(warp::path("tag"))
-        .and(warp::query::<TagParams>())
-        .and(warp::body::content_length_limit(1024 * 1024))
-        .and(warp::body::bytes())
-        .and(with_service(srv.clone()))
-        .and_then(handlers::tag::handler);
-    let tag_parsed_route = warp::post()
-        .and(warp::path("tag-parsed"))
-        .and(warp::query::<TagParams>())
-        .and(json_body())
-        .and(with_service(srv.clone()))
-        .and_then(handlers::tag_parsed::handler);
-    let metrics_route = warp::get()
-        .and(warp::path("metrics"))
-        .and_then(handlers::metrics::handler);
-    let l_cache_clone = lemma_cache.clone();
-    let e_cache_clone = embeddigs_cache.clone();
+    let main_router = Router::new()
+        .route("/live", get(handlers::live::handler))
+        .route("/tag", post(handlers::tag::handler))
+        .route("/tag-parsed", post(handlers::tag_parsed::handler))
+        .with_state(srv.clone());
 
     let cache_key = if cfg.cache_key.is_empty() {
         let ulid = Ulid::new();
@@ -197,41 +188,35 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     } else {
         cfg.cache_key.clone()
     };
+    let caches = CacheData {
+        lemma_cache: lemma_cache.clone(),
+        embeddings_cache: embeddings_cache.clone(),
+    };
+    let cache_path = format!("/clean-cache/{}", cache_key);
+    tracing::info!(path = cache_path, "clean cache");
+    let cache_router = Router::new()
+        .route(&cache_path, post(handlers::clean_cache::handler))
+        .with_state(Arc::new(caches));
 
-    let cache_path = format!("clean-cache/{}", cache_key);
-    tracing::info!("clean cache path: {}", cache_path);
-
-    let clean_cache_route = warp::post()
-        .and(warp::path("clean-cache"))
-        .and(warp::path(cache_key))
-        .and(warp::any().map(move || l_cache_clone.clone()))
-        .and(warp::any().map(move || e_cache_clone.clone()))
-        .and_then(handlers::clean_cache::handler);
+    let app = Router::new()
+        .merge(main_router)
+        .merge(cache_router)
+        .route("/metrics", get(handlers::metrics::handler))
+        .layer((
+            DefaultBodyLimit::max(1024 * 1024),
+            TraceLayer::new_for_http(),
+            TimeoutLayer::new(Duration::from_secs(50)),
+        ));
 
     let metrics = Metrics::new(vec!["/tag-parsed".to_string(), "/tag".to_string()])?;
     let cp_metrics = metrics.clone();
 
-    let routes = live_route
-        .or(metrics_route)
-        .or(tag_parsed_route)
-        .or(tag_route)
-        .or(clean_cache_route);
-
-    let final_routes = routes
-        .with(warp::cors().allow_any_origin())
-        .with(warp::log::custom(move |log| cp_metrics.observe(log)))
-        .recover(errors::handle_rejection);
+    // let final_routes = routes
+    //     .with(warp::log::custom(move |log| cp_metrics.observe(log)))
+    //     .recover(errors::handle_rejection);
 
     let ct = cancel_token.clone();
-    let (_, server) = warp::serve(final_routes).bind_with_graceful_shutdown(
-        ([0, 0, 0, 0], cfg.port),
-        async move {
-            ct.cancelled().await;
-        },
-    );
-
-    let ct = cancel_token.clone();
-    let embeddigs_cache_clone = embeddigs_cache.clone();
+    let embeddigs_cache_clone = embeddings_cache.clone();
     let lemma_cache_clone = lemma_cache.clone();
     let timer = tokio::task::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(5));
@@ -258,7 +243,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
             tokio::select! {
                 _ = time::sleep(after) => {
                     log::info!("clear cache");
-                    embeddigs_cache.invalidate_all();
+                    embeddings_cache.invalidate_all();
                     lemma_cache.invalidate_all();
                 },
                 _ = ct.cancelled() => {
@@ -270,8 +255,22 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
     });
 
     std::mem::drop(_perf_log);
-    log::info!("Serving. waiting for server to finish");
-    tokio::task::spawn(server).await?;
+    tracing::info!(port = cfg.port, "serving ...");
+
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", cfg.port)).await?;
+
+    let handle = axum_server::Handle::new();
+    let shutdown_future = shutdown_signal_handle(handle.clone(), cancel_token.clone());
+    tokio::spawn(shutdown_future);
+
+    // Run the server with graceful shutdown
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            cancel_token.cancelled().await;
+        })
+        .await?;
+
+    // tokio::task::spawn(server).await?;
     timer.await?;
     cache_timer.await?;
 
@@ -290,12 +289,8 @@ fn get_next_clear_run() -> time::Duration {
     next_day_3_am.signed_duration_since(now).to_std().unwrap()
 }
 
-fn with_service(
-    srv: Arc<RwLock<Service>>,
-) -> impl Filter<Extract = (Arc<RwLock<Service>>,), Error = std::convert::Infallible> + Clone {
-    warp::any().map(move || srv.clone())
-}
-
-fn json_body() -> impl Filter<Extract = (Vec<Vec<String>>,), Error = warp::Rejection> + Clone {
-    warp::body::content_length_limit(1024 * 1024).and(warp::body::json())
+async fn shutdown_signal_handle(handle: axum_server::Handle, cancel_token: CancellationToken) {
+    cancel_token.cancelled().await;
+    tracing::trace!("Received termination signal shutting down");
+    handle.graceful_shutdown(Some(Duration::from_secs(10)));
 }
