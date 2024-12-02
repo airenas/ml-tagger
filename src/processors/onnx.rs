@@ -45,7 +45,7 @@ impl OnnxWrapper {
 
         let res = OnnxWrapper {
             model,
-            emb_dim: emb_dim as usize,
+            emb_dim,
         };
         Ok(res)
     }
@@ -123,7 +123,7 @@ impl Processor for OnnxWrapper {
             let shape = outputs[0].shape();
             log::trace!("Output shape: {:?}", shape);
             let output_tensors = outputs[0].try_extract_tensor::<i32>()?;
-            let output_values: Vec<i32> = output_tensors.iter().map(|i| *i).collect();
+            let output_values: Vec<i32> = output_tensors.iter().copied().collect();
             let mut i = 0;
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
