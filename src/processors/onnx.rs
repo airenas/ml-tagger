@@ -1,7 +1,4 @@
 use ndarray::Array;
-use ort::execution_providers::{
-    CPUExecutionProvider, CUDAExecutionProvider, CoreMLExecutionProvider,
-};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use std::env;
@@ -12,60 +9,43 @@ use crate::handlers::data::{Processor, WorkContext};
 use crate::utils::perf::PerfLogger;
 
 pub struct OnnxWrapper {
-    // environment: Environment,
-    // model_bytes: Vec<u8>,
-    threads: u16,
+    emb_dim: usize,
     model: Session,
 }
 
 impl OnnxWrapper {
-    pub fn new(file_str: &str, threads: u16) -> anyhow::Result<OnnxWrapper> {
+    pub fn new(file_str: &str, threads: u16, emb_dim: usize) -> anyhow::Result<OnnxWrapper> {
         match env::var("LD_LIBRARY_PATH") {
             Ok(value) => log::info!("LD_LIBRARY_PATH: {}", value),
             Err(_) => log::warn!("LD_LIBRARY_PATH env var not found"),
         };
         let _perf_log = PerfLogger::new("onnx loader");
-
-        // ort::init()
-        //     .with_execution_providers([CPUExecutionProvider::default().build().error_on_failure()])
-        //     .commit()?;
         // ort::init()
         //     .with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
         //     .commit()?;
-        log::info!("Loading ONNX model from {}", file_str);
-        // let model = Session::builder()?.commit_from_file(file_str)?;
+        tracing::info!(
+            onnx_tgreads = threads,
+            file = file_str,
+            "loading ONNX model"
+        );
         let model = Session::builder()?
-            .with_execution_providers([CPUExecutionProvider::default()
-                // .with_cuda_graph()
-                .build()
-                .error_on_failure()])?
-            // .with_execution_providers([CoreMLExecutionProvider::default()
-            // .with_cpu_only()
-            // this model uses control flow operators, so enable CoreML on subgraphs too
-            // .with_subgraphs()
-            // only use the ANE as the CoreML CPU implementation is super slow for this model
-            // .with_ane_only()
-            // .build()])?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
-            // .with_intra_threads(12)?
+            .with_inter_threads(threads as usize)?
             .commit_from_file(file_str)?;
 
-        // let environment = Environment::builder()
-        //     .with_name("onnx")
-        //     .with_log_level(LoggingLevel::Verbose)
-        //     .build()?;
-        // let mut file = File::open(file_str)?;
-        // let mut buffer = Vec::new();
-        // file.read_to_end(&mut buffer)?;
-
         show_info(&model)?;
+        let model_input_dim = get_dim(&model)?;
+        if emb_dim != model_input_dim {
+            return Err(anyhow::anyhow!(
+                "Model input dimension ({}) does not match embedding dim ({})",
+                model_input_dim,
+                emb_dim
+            ));
+        }
 
-        // log::info!("ONNX threads {threads}");
         let res = OnnxWrapper {
-            //environment,
-            // model_bytes: buffer,
-            threads,
             model,
+            emb_dim: emb_dim as usize,
         };
         Ok(res)
     }
@@ -74,43 +54,60 @@ impl OnnxWrapper {
 fn show_info(model: &Session) -> anyhow::Result<()> {
     let meta = model.metadata()?;
     if let Ok(x) = meta.name() {
-        log::info!("Name: {x}");
+        tracing::info!(name = x, "model");
     }
     if let Ok(x) = meta.description() {
-        log::info!("Description: {x}");
+        tracing::info!(description = x, "model");
     }
     if let Ok(x) = meta.producer() {
-        log::info!("Produced by {x}");
+        tracing::info!(by = x, "model");
     }
 
-    log::info!("Inputs:");
     for (i, input) in model.inputs.iter().enumerate() {
-        log::info!("    {i} {}: {}", input.name, input.input_type);
+        tracing::info!(
+            i,
+            name = input.name,
+            "type" = format!("{}", input.input_type),
+            "input"
+        );
     }
-    log::info!("Outputs:");
     for (i, output) in model.outputs.iter().enumerate() {
-        log::info!("    {i} {}: {}", output.name, output.output_type);
+        tracing::info!(
+            i,
+            name = output.name,
+            "type" = format!("{}", output.output_type),
+            "output"
+        );
     }
     Ok(())
+}
+
+fn get_dim(model: &Session) -> anyhow::Result<usize> {
+    if model.inputs.len() != 1 {
+        return Err(anyhow::anyhow!("Expected 1 input tensor"));
+    }
+    let input = &model.inputs[0];
+    if input.input_type.is_tensor() {
+        let shape = input
+            .input_type
+            .tensor_dimensions()
+            .ok_or_else(|| anyhow::anyhow!("Input not a tensor"))?;
+        if shape.len() != 3 {
+            return Err(anyhow::anyhow!("Expected 3D tensor"));
+        }
+        Ok(shape[2] as usize)
+    } else {
+        Err(anyhow::anyhow!("Expected tensor input"))
+    }
 }
 
 #[async_trait]
 impl Processor for OnnxWrapper {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("onnx");
-        // let _inner_perf_log = PerfLogger::new("onnx load from mem");
-        // let mut session = self
-        //     .environment
-        //     .new_session_builder()?
-        //     .use_cuda(0)?
-        //     .with_optimization_level(GraphOptimizationLevel::DisableAll)?
-        //     .with_number_threads(self.threads)?
-        //     .with_model_from_memory(self.model_bytes.clone())?;
-
-        // std::mem::drop(_inner_perf_log);
-        let _inner_perf_log = PerfLogger::new("onnx run");
         for sent in ctx.sentences.iter_mut() {
-            let mut combined_data: Vec<f32> = Vec::new();
+            let count = sent.iter().filter(|x| x.is_word).count();
+            let mut combined_data: Vec<f32> = Vec::with_capacity(count * self.emb_dim);
             let mut cw = 0;
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
@@ -121,13 +118,12 @@ impl Processor for OnnxWrapper {
                     cw += 1;
                 }
             }
-            let input_tensor = Array::from_shape_vec((1, cw, 150), combined_data)?;
+            let input_tensor = Array::from_shape_vec((1, cw, self.emb_dim), combined_data)?;
             let outputs = self.model.run(ort::inputs![input_tensor]?)?;
             let shape = outputs[0].shape();
             log::trace!("Output shape: {:?}", shape);
             let output_tensors = outputs[0].try_extract_tensor::<i32>()?;
             let output_values: Vec<i32> = output_tensors.iter().map(|i| *i).collect();
-            //    log::info!("output_values: {:?}", output_values);
             let mut i = 0;
             for word_info in sent.iter_mut() {
                 if word_info.is_word {

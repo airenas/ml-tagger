@@ -117,23 +117,25 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         .time_to_idle(Duration::from_secs(60 * 60 * 5)) // 5h
         .build();
 
-    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads)?;
-    // let onnx = processors::ts::TSWrapper::new()?;
-    let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
-
-    let boxed_embedder = if cfg.embeddings.ends_with(".fifu") {
+    let (boxed_embedder, dims) = if cfg.embeddings.ends_with(".fifu") {
         let embedder = processors::embedding_ff::FinalFusionWrapper::new(
             &cfg.embeddings,
             embeddigs_cache.clone(),
         )?;
+        let dims = embedder.dims();
         let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
-        be
+        (be, dims)
     } else {
         let embedder =
             processors::embedding::FastTextWrapper::new(&cfg.embeddings, embeddigs_cache.clone())?;
+        let dims = embedder.dims();
         let be: Box<dyn data::Processor + Send + Sync> = Box::new(embedder);
-        be
+        (be, dims)
     };
+
+    let onnx = processors::onnx::OnnxWrapper::new(&cfg.onnx, cfg.onnx_threads, dims)?;
+    // let onnx = processors::ts::TSWrapper::new()?;
+    let boxed_onnx: Box<dyn data::Processor + Send + Sync> = Box::new(onnx);
 
     let tags = processors::tags::TagsMapper::new(&make_file_path(&cfg.data_dir, FN_TAGS)?)?;
     let boxed_tags: Box<dyn data::Processor + Send + Sync> = Box::new(tags);

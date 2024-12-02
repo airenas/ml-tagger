@@ -30,7 +30,6 @@ impl FinalFusionWrapper {
         let res = FinalFusionWrapper { embeds, cache };
         Ok(res)
     }
-
     pub fn dims(&self) -> usize {
         self.embeds.dims()
     }

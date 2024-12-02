@@ -25,6 +25,9 @@ impl FastTextWrapper {
         let res = FastTextWrapper { model, cache };
         Ok(res)
     }
+    pub fn dims(&self) -> usize {
+        self.model.get_dimension() as usize
+    }
 }
 
 #[async_trait]
