@@ -5,7 +5,7 @@ use std::io::{self, BufRead};
 use anyhow::Ok;
 use async_trait::async_trait;
 
-use crate::handlers::data::{Processor, WorkContext, WorkMI, WorkWord};
+use crate::handlers::data::{Processor, WordType, WorkContext, WorkMI, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings::is_number;
 
@@ -65,18 +65,18 @@ impl Processor for Restorer {
     }
 }
 
-fn get_type(word_info: &WorkWord) -> Option<String> {
+fn get_type(word_info: &WorkWord) -> WordType {
     if !word_info.is_word {
-        return Some("SPACE".to_string());
+        return WordType::Space;
     }
     let w = word_info.w.as_str();
     let mi = word_info.mi.as_deref().unwrap_or_default();
     if is_number(w) {
-        return Some("NUMBER".to_string());
+        return WordType::Number;
     } else if is_sep(mi) {
-        return Some("SEPARATOR".to_string());
+        return WordType::Separator;
     }
-    Some("WORD".to_string())
+    WordType::Word
 }
 
 fn is_sep(mi: &str) -> bool {

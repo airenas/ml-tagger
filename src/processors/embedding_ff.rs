@@ -24,8 +24,7 @@ impl FinalFusionWrapper {
         cache: Cache<String, Arc<Vec<f32>>>,
     ) -> anyhow::Result<FinalFusionWrapper> {
         let _perf_log = PerfLogger::new("finalfusion loader");
-        let embeds = if file.starts_with("mmap:") {
-            let actual_path = &file[5..];
+        let embeds = if let Some(actual_path) = file.strip_prefix("mmap:") {
             let mut reader = BufReader::new(File::open(actual_path)?);
             tracing::info!(file = actual_path, "loading FinalFusion as MemMap file");
             Embeddings::mmap_embeddings(&mut reader)?

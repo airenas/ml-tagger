@@ -12,7 +12,7 @@ use axum::{
 };
 use tokio::sync::RwLock;
 
-use super::data::{ApiResult, TagParams};
+use super::data::{ApiResult, TagParams, WordType};
 
 #[debug_handler]
 pub async fn handler(
@@ -90,7 +90,7 @@ pub fn map_res(ctx: WorkContext) -> anyhow::Result<Vec<Word>> {
             });
         }
         res.push(Word {
-            w_type: Some("SENTENCE_END".to_string()),
+            w_type: WordType::SentenceEnd,
             w: None,
             mi: None,
             lemma: None,
