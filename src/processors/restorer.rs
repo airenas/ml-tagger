@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -9,12 +10,15 @@ use crate::handlers::data::{Processor, WordType, WorkContext, WorkMI, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings::is_number;
 
-pub struct Restorer {
-    frequency_vocab: HashMap<String, HashMap<String, u32>>,
+type CliticMap<'a> = HashMap<(Cow<'a, str>, Cow<'a, str>), u32>;
+type FreqData<'a> = HashMap<String, CliticMap<'a>>;
+
+pub struct Restorer<'a> {
+    frequency_vocab: FreqData<'a>,
 }
 
-impl Restorer {
-    pub fn new(file_str: &str) -> anyhow::Result<Restorer> {
+impl<'a> Restorer<'a> {
+    pub fn new(file_str: &str) -> anyhow::Result<Restorer<'a>> {
         let _perf_log = PerfLogger::new("restorer frequency loader");
         log::info!("Loading frequences from {}", file_str);
         let frequency_vocab = read_freq_file(file_str)?;
@@ -23,11 +27,7 @@ impl Restorer {
         Ok(res)
     }
 
-    fn restore(
-        &self,
-        word_info: &WorkWord,
-        freq_data: Option<&HashMap<String, u32>>,
-    ) -> anyhow::Result<(Option<String>, Option<String>)> {
+    fn restore(&self, word_info: &WorkWord) -> anyhow::Result<(Option<String>, Option<String>)> {
         if let Some(predicted) = &word_info.predicted_str {
             if let Some(mis) = word_info.mis.as_ref() {
                 if mis.len() == 1 {
@@ -35,6 +35,7 @@ impl Restorer {
                     return Ok((mi.mi.clone(), mi.lemma.clone()));
                 }
                 if mis.len() > 1 {
+                    let freq_data = self.frequency_vocab.get(&word_info.w);
                     let mi = restore(mis, predicted, freq_data);
                     return Ok((mi.mi, mi.lemma));
                 }
@@ -47,14 +48,13 @@ impl Restorer {
 }
 
 #[async_trait]
-impl Processor for Restorer {
+impl Processor for Restorer<'_> {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("restorer mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
-                    let freq_data = self.frequency_vocab.get(&word_info.w);
-                    let (mi, lemma) = self.restore(word_info, freq_data)?;
+                    let (mi, lemma) = self.restore(word_info)?;
                     word_info.mi = mi;
                     word_info.lemma = lemma;
                 }
@@ -83,10 +83,10 @@ fn is_sep(mi: &str) -> bool {
     mi.starts_with('T')
 }
 
-fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<String, u32>>> {
+fn read_freq_file<'a>(filename: &str) -> anyhow::Result<FreqData<'a>> {
     let file = File::open(filename)?;
     let reader = io::BufReader::new(file);
-    let mut clitics_map: HashMap<String, HashMap<String, u32>> = HashMap::new();
+    let mut clitics_map: FreqData<'a> = HashMap::new();
     for line in reader.lines() {
         let (key, value) = parse_line(line?)?;
         clitics_map.insert(key, value);
@@ -95,11 +95,11 @@ fn read_freq_file(filename: &str) -> anyhow::Result<HashMap<String, HashMap<Stri
     Ok(clitics_map)
 }
 
-fn parse_line(line: String) -> anyhow::Result<(String, HashMap<String, u32>)> {
+fn parse_line(line: String) -> anyhow::Result<(String, CliticMap<'static>)> {
     let parts: Vec<&str> = line.split('\t').collect();
     if let Some(p) = parts.get(1) {
         let mi_parts: Vec<&str> = p.split(';').collect();
-        let res: anyhow::Result<HashMap<String, u32>> = mi_parts
+        let res: anyhow::Result<CliticMap> = mi_parts
             .iter()
             .map(|&part| {
                 let mut split = part.split(':');
@@ -127,11 +127,10 @@ fn parse_line(line: String) -> anyhow::Result<(String, HashMap<String, u32>)> {
                             .parse::<u32>()
                             .map_err(|err| anyhow::anyhow!("no freq in {part}: {err}"))
                     })?;
-                let key = format!("{mf}:{mi}");
-                Ok((key, freq))
+                Ok(((Cow::Owned(mf), Cow::Owned(mi)), freq))
             })
             .collect();
-        let res: HashMap<String, u32> = res?;
+        let res: HashMap<(Cow<str>, Cow<str>), u32> = res?;
         let w = parts.first().unwrap().trim().to_string();
         if w.is_empty() {
             return Err(anyhow::anyhow!("failed parse line: {}: no word", line));
@@ -186,7 +185,7 @@ fn calc(p: &str, t: &str) -> f64 {
     res
 }
 
-fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&HashMap<String, u32>>) -> WorkMI {
+fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&CliticMap>) -> WorkMI {
     let mut bv = 1000.0;
     let empty_res = WorkMI {
         mi: None,
@@ -205,16 +204,12 @@ fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&HashMap<String
     res.clone()
 }
 
-fn get_freq(
-    freq_data: Option<&HashMap<String, u32>>,
-    lemma: &Option<String>,
-    mi: &Option<String>,
-) -> f64 {
+fn get_freq(freq_data: Option<&CliticMap>, lemma: &Option<String>, mi: &Option<String>) -> f64 {
     if let Some(fd) = freq_data {
         if let Some(mi_v) = mi {
             if let Some(lemma_v) = lemma {
                 // TODO refactor key to (lenna, mi)
-                let v = fd.get(&format!("{lemma_v}:{mi_v}"));
+                let v = fd.get(&(Cow::Borrowed(lemma_v), Cow::Borrowed(mi_v)));
                 return v.map_or(0.0, |f| *f as f64);
             }
         }
@@ -227,7 +222,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    fn test_parse(input: String, expected: (String, HashMap<String, u32>)) {
+    fn test_parse(input: String, expected: (String, CliticMap)) {
         assert_eq!(parse_line(input).unwrap(), expected);
     }
 
@@ -245,10 +240,14 @@ mod tests {
         }
     }
 
+    fn make_key<'a>(l: &'a str, m: &'a str) -> (Cow<'a, str>, Cow<'a, str>) {
+        (Cow::Owned(l.to_string()), Cow::Owned(m.to_string()))
+    }
+
     parse_line_test!(parse_line_ok,
-        one_mi: "olia ol\taaa:olia:10".to_string(), ("olia ol".to_string(), HashMap::from([("aaa:olia".to_string(), 10)])),
-        two_mi: "olia ol\tPgfsdn:a:2;Pgmsdn:b:1".to_string(), ("olia ol".to_string(), HashMap::from([("Pgfsdn:a".to_string(), 2), ("Pgmsdn:b".to_string(), 1)])),
-        more_mi: "olia \taa:a:11;bb:b:22;cc:c:33;dd:d:44".to_string(), ("olia".to_string(), HashMap::from([("aa:a".to_string(), 11), ("bb:b".to_string(), 22), ("cc:c".to_string(), 33),  ("dd:d".to_string(), 44)])),
+        one_mi: "olia ol\taaa:olia:10".to_string(), ("olia ol".to_string(), HashMap::from([(make_key("aaa", "olia"), 10)])),
+        two_mi: "olia ol\tPgfsdn:a:2;Pgmsdn:b:1".to_string(), ("olia ol".to_string(), HashMap::from([(make_key("Pgfsdn", "a"), 2), (make_key("Pgmsdn","b"), 1)])),
+        more_mi: "olia \taa:a:11;bb:b:22;cc:c:33;dd:d:44".to_string(), ("olia".to_string(), HashMap::from([(make_key("aa","a"), 11), (make_key("bb","b"), 22), (make_key("cc","c"), 33),  (make_key("dd","d"), 44)])),
     );
 
     fn test_parse_fail(input: String) {
