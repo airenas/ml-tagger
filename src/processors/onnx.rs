@@ -110,9 +110,10 @@ impl Processor for OnnxWrapper {
             let mut combined_data: Vec<f32> = Vec::with_capacity(count * self.emb_dim);
             for word_info in sent.iter() {
                 if word_info.is_word {
-                    match &word_info.embeddings {
-                        Some(emb) => combined_data.extend(emb.iter()),
-                        None => {}
+                    if let Some(emb) = &word_info.embeddings { 
+                        combined_data.extend(emb.iter()) 
+                    } else {
+                        return Err(anyhow::anyhow!("Missing embeddings"));
                     }
                 }
             }
