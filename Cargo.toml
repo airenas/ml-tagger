@@ -28,7 +28,7 @@ chrono = "0.4"
 ndarray = "0.16"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = "0.1"
-finalfusion = "0.18"
+finalfusion =  { version = "0.18", features = ["memmap"] }
 axum = { version = "0.7", features = ["macros", "http2"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 tower-http = { version = "0.5", features = ["limit", "timeout", "trace"] }

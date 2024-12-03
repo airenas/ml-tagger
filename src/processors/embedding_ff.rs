@@ -2,9 +2,10 @@ use std::{fs::File, io::BufReader, sync::Arc};
 
 use anyhow::Ok;
 use async_trait::async_trait;
-use finalfusion::{
-    io::ReadEmbeddings, prelude::Embeddings, storage::StorageWrap, vocab::VocabWrap,
-};
+use finalfusion::io::ReadEmbeddings;
+use finalfusion::prelude::MmapEmbeddings;
+use finalfusion::{prelude::Embeddings, storage::StorageWrap, vocab::VocabWrap};
+
 use moka::future::Cache;
 
 use crate::{
@@ -23,9 +24,17 @@ impl FinalFusionWrapper {
         cache: Cache<String, Arc<Vec<f32>>>,
     ) -> anyhow::Result<FinalFusionWrapper> {
         let _perf_log = PerfLogger::new("finalfusion loader");
-        tracing::info!(file, "loading FinalFusion embedings");
-        let mut reader = BufReader::new(File::open(file)?);
-        let embeds = Embeddings::<VocabWrap, StorageWrap>::read_embeddings(&mut reader)?;
+        let embeds = if file.starts_with("mmap:") {
+            let actual_path = &file[5..];
+            let mut reader = BufReader::new(File::open(actual_path)?);
+            tracing::info!(file = actual_path, "loading FinalFusion as MemMap file");
+            Embeddings::mmap_embeddings(&mut reader)?
+        } else {
+            let mut reader = BufReader::new(File::open(file)?);
+            tracing::info!(file, "loading FinalFusion into memory");
+            Embeddings::<VocabWrap, StorageWrap>::read_embeddings(&mut reader)?
+        };
+
         tracing::info!(dims = embeds.dims(), "loaded");
         let res = FinalFusionWrapper { embeds, cache };
         Ok(res)
