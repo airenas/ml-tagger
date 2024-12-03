@@ -1,16 +1,20 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
+use axum::extract::State;
 use moka::future::Cache;
-use warp::Reply;
 
-use super::data::{Result, WorkMI};
+use super::{data::WorkMI, error::ApiError};
+
+pub struct CacheData {
+    pub lemma_cache: Cache<String, Arc<Vec<WorkMI>>>,
+    pub embeddings_cache: Cache<String, Arc<Vec<f32>>>,
+}
 
 pub async fn handler(
-    lemma_cache: Cache<String, Arc<Vec<WorkMI>>>,
-    embeddingd_cache: Cache<String, Arc<Vec<f32>>>,
-) -> Result<impl Reply> {
+    State(caches): axum::extract::State<Arc<CacheData>>,
+) -> Result<Cow<'static, str>, ApiError> {
     log::debug!("clean cache handler");
-    lemma_cache.invalidate_all();
-    embeddingd_cache.invalidate_all();
-    Ok("cache cleaned")
+    caches.lemma_cache.invalidate_all();
+    caches.embeddings_cache.invalidate_all();
+    Ok(std::borrow::Cow::Borrowed("cache cleaned"))
 }

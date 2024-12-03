@@ -7,13 +7,17 @@ pub struct PerfLogger {
 
 impl Drop for PerfLogger {
     fn drop(&mut self) {
-        log::info!("===== end: {} in {:.2?}", self.name, self.start.elapsed());
+        tracing::info!(
+            name = self.name,
+            elapsed = format!("{:.2?}", self.start.elapsed()),
+            "===== end"
+        );
     }
 }
 
 impl PerfLogger {
     pub fn new(name: &str) -> PerfLogger {
-        log::debug!("start: {name}");
+        tracing::debug!(name, "===== start");
         let start = Instant::now();
         PerfLogger {
             start,

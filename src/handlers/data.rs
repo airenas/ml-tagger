@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use warp::Rejection;
+
+use super::error::ApiError;
 
 pub struct WorkContext {
     pub params: TagParams,
@@ -17,12 +18,30 @@ pub struct WorkMI {
     pub lemma: Option<String>,
 }
 
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum WordType {
+    None,
+    Space,
+    Number,
+    Separator,
+    Word,
+    #[serde(rename = "SENTENCE_END")]
+    SentenceEnd,
+}
+
+impl WordType {
+    pub fn is_none(&self) -> bool {
+        *self == WordType::None
+    }
+}
+
 pub struct WorkWord {
     pub w: String,
     pub is_word: bool,
     pub mi: Option<String>,
     pub lemma: Option<String>,
-    pub w_type: Option<String>,
+    pub w_type: WordType,
     pub embeddings: Option<Arc<Vec<f32>>>,
     pub predicted: Option<i32>,
     pub predicted_str: Option<String>,
@@ -46,11 +65,12 @@ pub struct Service {
     pub calls: u32,
 }
 
-pub type Result<T> = std::result::Result<T, Rejection>;
+pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct LiveResponse {
     pub status: bool,
+    pub version: String,
 }
 
 #[derive(Deserialize)]
@@ -74,8 +94,8 @@ pub struct Word {
     pub mi: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lemma: Option<String>,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub w_type: Option<String>,
+    #[serde(rename = "type", skip_serializing_if = "WordType::is_none")]
+    pub w_type: WordType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embeddings: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,7 +124,7 @@ impl WorkWord {
             is_word,
             mi: None,
             lemma: None,
-            w_type: None,
+            w_type: WordType::None,
             embeddings: None,
             predicted: None,
             predicted_str: None,

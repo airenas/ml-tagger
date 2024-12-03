@@ -19,11 +19,14 @@ impl FastTextWrapper {
     pub fn new(file: &str, cache: Cache<String, Arc<Vec<f32>>>) -> anyhow::Result<FastTextWrapper> {
         let _perf_log = PerfLogger::new("fast text loader");
         let mut model = FastText::new();
-        log::info!("Loading FastText from {}", file);
+        tracing::info!(file, "Loading FastText");
         model.load_model(file).map_err(anyhow::Error::msg)?;
-        log::info!("Loaded FastText dim {}", model.get_dimension(),);
+        tracing::info!(dims = model.get_dimension(), "Loaded FastText" );
         let res = FastTextWrapper { model, cache };
         Ok(res)
+    }
+    pub fn dims(&self) -> usize {
+        self.model.get_dimension() as usize
     }
 }
 
@@ -37,7 +40,7 @@ impl Processor for FastTextWrapper {
                     let w = &word_info.w;
                     let emb = self.cache.get(w).await;
                     if let Some(val) = emb {
-                        log::debug!("in emb cache: {w}");
+                        tracing::trace!(word = w, "in emb cache");
                         word_info.embeddings = Some(val);
                     } else {
                         let embedding = self

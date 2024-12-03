@@ -1,49 +1,39 @@
 use std::sync::Arc;
 
 use crate::{
-    handlers::{
-        data::{Result, Service, Word, WorkContext, MI},
-        errors::{OtherError, ParamError},
-    },
+    handlers::data::{Service, Word, WorkContext, MI},
     utils::perf::PerfLogger,
 };
+use anyhow::Context;
+use axum::{
+    debug_handler,
+    extract::{self, Query, State},
+    Json,
+};
 use tokio::sync::RwLock;
-use tokio_util::bytes::Bytes;
-use warp::reply::Reply;
 
-use super::data::TagParams;
+use super::data::{ApiResult, TagParams, WordType};
 
+#[debug_handler]
 pub async fn handler(
-    params: TagParams,
-    input: Bytes,
-    srv_wrap: Arc<RwLock<Service>>,
-) -> Result<impl Reply> {
+    State(srv_wrap): State<Arc<RwLock<Service>>>,
+    Query(params): Query<TagParams>,
+    string_body: String,
+) -> ApiResult<extract::Json<Vec<Word>>> {
     let _perf_log = PerfLogger::new("tag handler");
 
-    let s = match std::str::from_utf8(&input) {
-        Ok(v) => Ok(v),
-        Err(_) => Err(ParamError {
-            msg: "no utf-8 input".to_string(),
-        }),
-    }?;
-
-    let mut ctx = WorkContext::new(params, s.trim().to_string());
+    let mut ctx = WorkContext::new(params, string_body.trim().to_string());
 
     let srv = srv_wrap.read().await;
-    srv.lexer
-        .process(&mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
+    srv.lexer.process(&mut ctx).await.context("lex")?;
 
     let cw: usize = ctx.sentences.iter().map(|f| f.len()).sum();
     log::debug!("got {} sent, {} words", ctx.sentences.len(), cw);
 
-    process_line(&srv, &mut ctx)
-        .await
-        .map_err(|e| OtherError { msg: e.to_string() })?;
+    process_line(&srv, &mut ctx).await.context("process")?;
 
-    let res = map_res(ctx).map_err(|e| OtherError { msg: e.to_string() })?;
-    Ok(warp::reply::json(&res).into_response())
+    let res = map_res(ctx).context("map res")?;
+    Ok(Json(res))
 }
 
 pub async fn process_line(
@@ -100,7 +90,7 @@ pub fn map_res(ctx: WorkContext) -> anyhow::Result<Vec<Word>> {
             });
         }
         res.push(Word {
-            w_type: Some("SENTENCE_END".to_string()),
+            w_type: WordType::SentenceEnd,
             w: None,
             mi: None,
             lemma: None,
