@@ -23,7 +23,7 @@ pub struct WorkWord {
     pub is_word: bool,
     pub mi: Option<String>,
     pub lemma: Option<String>,
-    pub w_type: Option<String>,
+    pub w_type: Option<String>, // TODO refactor to enum
     pub embeddings: Option<Arc<Vec<f32>>>,
     pub predicted: Option<i32>,
     pub predicted_str: Option<String>,
@@ -77,7 +77,7 @@ pub struct Word {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lemma: Option<String>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub w_type: Option<String>,
+    pub w_type: Option<String>, // TODO refactor to enum
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embeddings: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]

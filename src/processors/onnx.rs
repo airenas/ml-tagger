@@ -108,27 +108,23 @@ impl Processor for OnnxWrapper {
         for sent in ctx.sentences.iter_mut() {
             let count = sent.iter().filter(|x| x.is_word).count();
             let mut combined_data: Vec<f32> = Vec::with_capacity(count * self.emb_dim);
-            let mut cw = 0;
-            for word_info in sent.iter_mut() {
+            for word_info in sent.iter() {
                 if word_info.is_word {
                     match &word_info.embeddings {
                         Some(emb) => combined_data.extend(emb.iter()),
                         None => {}
                     }
-                    cw += 1;
                 }
             }
-            let input_tensor = Array::from_shape_vec((1, cw, self.emb_dim), combined_data)?;
+            let input_tensor = Array::from_shape_vec((1, count, self.emb_dim), combined_data)?;
             let outputs = self.model.run(ort::inputs![input_tensor]?)?;
             let shape = outputs[0].shape();
             log::trace!("Output shape: {:?}", shape);
             let output_tensors = outputs[0].try_extract_tensor::<i32>()?;
             let output_values: Vec<i32> = output_tensors.iter().copied().collect();
-            let mut i = 0;
-            for word_info in sent.iter_mut() {
+            for (i, word_info) in sent.iter_mut().enumerate() {
                 if word_info.is_word {
                     word_info.predicted = Some(output_values[i]);
-                    i += 1;
                 }
             }
         }

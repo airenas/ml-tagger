@@ -213,6 +213,7 @@ fn get_freq(
     if let Some(fd) = freq_data {
         if let Some(mi_v) = mi {
             if let Some(lemma_v) = lemma {
+                // TODO refactor key to (lenna, mi)
                 let v = fd.get(&format!("{lemma_v}:{mi_v}"));
                 return v.map_or(0.0, |f| *f as f64);
             }

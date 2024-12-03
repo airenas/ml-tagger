@@ -29,16 +29,16 @@ impl StaticWords {
 
     fn try_find(&self, w: &str) -> Option<Arc<Vec<WorkMI>>> {
         if is_number(w) {
-            return Some(to_word_mi("M----d-"));
+            return Some(to_word_mi("M----d-")); // TODO make static
         }
         if let Some(s) = self.vocab.get(w) {
-            return Some(s.clone());
+            return Some(s.clone()); // TODO make static
         }
         if starts_with_nonalpha_num(w) {
-            return Some(to_word_mi("X-"));
+            return Some(to_word_mi("X-")); // TODO make static
         }
         if w.len()  > 1 && w.contains('%') {
-            return Some(to_word_mi("X-"));
+            return Some(to_word_mi("X-")); // TODO make static
         }
         None
     }
