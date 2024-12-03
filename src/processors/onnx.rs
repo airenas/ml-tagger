@@ -122,9 +122,11 @@ impl Processor for OnnxWrapper {
             log::trace!("Output shape: {:?}", shape);
             let output_tensors = outputs[0].try_extract_tensor::<i32>()?;
             let output_values: Vec<i32> = output_tensors.iter().copied().collect();
-            for (i, word_info) in sent.iter_mut().enumerate() {
+            let mut i = 0;
+            for word_info in sent.iter_mut() {
                 if word_info.is_word {
                     word_info.predicted = Some(output_values[i]);
+                    i += 1;
                 }
             }
         }

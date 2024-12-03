@@ -1,6 +1,7 @@
 mod config;
 
 use axum::extract::DefaultBodyLimit;
+use axum::middleware;
 use chrono::NaiveDateTime;
 use clap::Parser;
 use config::make_file_path;
@@ -176,11 +177,19 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         lexer: boxed_lexer,
     }));
 
+    let metrics = Metrics::new()?;
+
+    let metrics_cl = metrics.clone();
+
     let main_router = Router::new()
         .route("/live", get(handlers::live::handler))
         .route("/tag", post(handlers::tag::handler))
         .route("/tag-parsed", post(handlers::tag_parsed::handler))
-        .with_state(srv.clone());
+        .with_state(srv.clone())
+        .layer(middleware::from_fn(move |req, next| {
+            let mc = metrics_cl.clone();
+            async move { mc.observe(req, next).await }
+        }));
 
     let cache_key = if cfg.cache_key.is_empty() {
         let ulid = Ulid::new();
@@ -207,13 +216,6 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(50)),
         ));
-
-    let metrics = Metrics::new(vec!["/tag-parsed".to_string(), "/tag".to_string()])?;
-    let cp_metrics = metrics.clone();
-
-    // let final_routes = routes
-    //     .with(warp::log::custom(move |log| cp_metrics.observe(log)))
-    //     .recover(errors::handle_rejection);
 
     let ct = cancel_token.clone();
     let embeddigs_cache_clone = embeddings_cache.clone();
