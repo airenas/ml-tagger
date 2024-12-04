@@ -4,18 +4,20 @@ services:
     environment:
       - SEGMENTATION_URL=http://lex:8080/
       - RUST_LOG=DEBUG,tracing=ERROR,ml_tagger::processors::lemmatize_words=INFO,hyper_util::client::legacy::pool=INFO,ml_tagger::processors::embedding=INFO
-      - ONNX_THREADS=8
-      - DATA_DIR=/data/${MODEL}
-      - EMBEDDINGS_FILE=mmap:/data/${MODEL}/delfi_cbow.150.fifu
-      - ONNX_FILE=/data/${MODEL}/model.onnx
-      - LEMMA_URL=http://lemma:8000/analyze/{}?human=true&origin=true
-      - LEMMA_CACHE=70000
-      - EMBEDDINGS_CACHE=50000
+      - ONNX_THREADS=6
+      - DATA_DIR=/data
+      - EMBEDDINGS_FILE=mmap:/data/delfi_cbow.150.fifu
+      - ONNX_FILE=/data/model.onnx
+      - LEMMA_CACHE=50000
+      - EMBEDDINGS_CACHE=20000
       - LEX_URL=http://lex:8080/
+      - LEMMA_URL=http://lemma:8000/analyze/{}?human=true&origin=true
     ports:
       - "${PORT}:8000" 
     volumes:
       - tagger-data:/data:ro
+    depends_on:
+      - tagger-vol
   
   lemma:
     image: airenas/lema:1.4.1212
@@ -31,9 +33,10 @@ services:
      - "8091:8080"
 
   tagger-vol: 
-    image: intelektikalt/ml-tagger-data:7.3
+    image: intelektikalt/ml-tagger-data:${TAGGER_VOL_VERSION}
     volumes:
       - tagger-data:/data:rw
 
 volumes:
   tagger-data:
+    name: tagger-data
