@@ -1,4 +1,5 @@
 #################################################################
+version?=0.1.1-debug
 url=localhost:8000/debug/pprof/heap
 # url=https://sinteze.intelektika.lt/tagger-ml/debug/pprof/heap
 file=f1
