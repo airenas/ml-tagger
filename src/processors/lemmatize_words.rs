@@ -54,7 +54,7 @@ impl LemmatizeWordsMapper {
         log::info!("lemma url: {url_str}");
 
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-        let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
+        let client = Client::builder().pool_max_idle_per_host(5).timeout(Duration::from_secs(10)).build()?;
         let client_with_retry = ClientBuilder::new(client)
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
