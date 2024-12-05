@@ -8,9 +8,18 @@ run:
 run/build: build/local
 	RUST_LOG=$(log) target/release/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data-dir ${DATA_DIR} --lemma-url "${LEMMA_URL}" --lex-url "${LEX_URL}" --onnx-threads 6
 .PHONY: run/build
+run/build/debug: build/debug
+	RUST_LOG=$(log) target/debug/ml-tagger-ws --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data-dir ${DATA_DIR} --lemma-url "${LEMMA_URL}" --lex-url "${LEX_URL}" --onnx-threads 6
+.PHONY: run/build
+run/trace: 
+	RUSTFLAGS="--cfg tokio_unstable" RUST_LOG=$(log),tokio=trace cargo run --bin ml-tagger-ws -- --embeddings ${EMBEDDINGS_FILE} --onnx ${ONNX_FILE} --data-dir ${DATA_DIR} --lemma-url "${LEMMA_URL}" --lex-url "${LEX_URL}" --onnx-threads 6 --cache-key=1
+.PHONY: run/build
 ###############################################################################
 build/local: 
 	cargo build --release
+.PHONY: build/local
+build/debug: 
+	cargo build
 .PHONY: build/local
 ###############################################################################
 test/unit:
