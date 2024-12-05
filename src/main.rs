@@ -27,6 +27,14 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tokio::signal::unix::{signal, SignalKind};
 use ulid::Ulid;
 
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+
 use axum::{
     routing::{get, post},
     Router,
@@ -76,6 +84,7 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
+    // console_subscriber::init();
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::Layer::default().compact())
@@ -181,6 +190,9 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
 
     let metrics_cl = metrics.clone();
 
+    let profile_router = axum::Router::new()
+        .route("/debug/pprof/heap", axum::routing::get(handle_get_heap));
+
     let main_router = Router::new()
         .route("/live", get(handlers::live::handler))
         .route("/tag", post(handlers::tag::handler))
@@ -208,6 +220,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         .with_state(Arc::new(caches));
 
     let app = Router::new()
+        .merge(profile_router) 
         .merge(main_router)
         .merge(cache_router)
         .route("/metrics", get(handlers::metrics::handler))
@@ -272,8 +285,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         })
         .await?;
 
-    // tokio::task::spawn(server).await?;
-    timer.await?;
+   timer.await?;
     cache_timer.await?;
 
     tracing::info!("Bye");
@@ -295,4 +307,25 @@ async fn shutdown_signal_handle(handle: axum_server::Handle, cancel_token: Cance
     cancel_token.cancelled().await;
     tracing::trace!("Received termination signal shutting down");
     handle.graceful_shutdown(Some(Duration::from_secs(10)));
+}
+
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+
+pub async fn handle_get_heap() -> Result<impl IntoResponse, (StatusCode, String)> {
+    let mut prof_ctl = jemalloc_pprof::PROF_CTL.as_ref().unwrap().lock().await;
+    require_profiling_activated(&prof_ctl)?;
+    let pprof = prof_ctl
+        .dump_pprof()
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    Ok(pprof)
+}
+
+/// Checks whether jemalloc profiling is activated an returns an error response if not.
+fn require_profiling_activated(prof_ctl: &jemalloc_pprof::JemallocProfCtl) -> Result<(), (StatusCode, String)> {
+    if prof_ctl.activated() {
+        Ok(())
+    } else {
+        Err((axum::http::StatusCode::FORBIDDEN, "heap profiling not activated".into()))
+    }
 }
