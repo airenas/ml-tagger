@@ -2,6 +2,7 @@ pub mod config;
 pub mod handlers;
 pub mod processors;
 pub mod utils;
+pub mod allocator;
 
 pub const FN_TAGS: &str = "tags";
 pub const FN_CLITICS: &str = "clitics";

@@ -47,3 +47,6 @@ pretty_assertions = "1.4"
 [[bin]]
 name = "ml-tagger-ws"
 path = "src/main.rs"
+
+[features]
+profiling = []

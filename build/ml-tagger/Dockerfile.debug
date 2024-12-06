@@ -10,7 +10,7 @@ WORKDIR /src/
 COPY ./ /src
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-      CARGO_APP_VERSION=$BUILD_VERSION cargo build
+      CARGO_APP_VERSION=$BUILD_VERSION cargo build --features=profiling
 #########################################################################################
 FROM debian:bookworm-slim AS runner
 

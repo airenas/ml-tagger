@@ -19,7 +19,7 @@ build/local:
 	cargo build --release
 .PHONY: build/local
 build/debug: 
-	cargo build
+	cargo build --features profiling
 .PHONY: build/local
 ###############################################################################
 test/unit:

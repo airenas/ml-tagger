@@ -8,7 +8,9 @@ use thiserror::Error;
 pub enum ApiError {
     #[error("bad request: {0}, details: {1}")]
     BadRequest(String, String),
-    #[error("Server error: {0}`")]
+    #[error("PProf not activated")]
+    PProfNotActivated(),
+    #[error("Server error: {0}")]
     Server(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -33,6 +35,13 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Cow::Borrowed("Internal Server Error"),
+                )
+            }
+            ApiError::PProfNotActivated() => {
+                tracing::error!("PProf not activated");
+                (
+                    StatusCode::FORBIDDEN,
+                    Cow::Borrowed("PProf not activated"),
                 )
             }
         };

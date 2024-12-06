@@ -5,3 +5,4 @@ pub mod tag_parsed;
 pub mod metrics;
 pub mod clean_cache;
 pub mod error;
+pub mod pprof;
