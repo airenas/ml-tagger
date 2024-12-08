@@ -20,9 +20,9 @@ pub struct Restorer<'a> {
 impl<'a> Restorer<'a> {
     pub fn new(file_str: &str) -> anyhow::Result<Restorer<'a>> {
         let _perf_log = PerfLogger::new("restorer frequency loader");
-        log::info!("Loading frequences from {}", file_str);
+        tracing::info!(file = file_str, "Loading frequences");
         let frequency_vocab = read_freq_file(file_str)?;
-        log::info!("loaded frequences {}", frequency_vocab.len());
+        tracing::info!(len = frequency_vocab.len(), "loaded frequences");
         let res = Restorer { frequency_vocab };
         Ok(res)
     }
@@ -91,6 +91,7 @@ fn read_freq_file<'a>(filename: &str) -> anyhow::Result<FreqData<'a>> {
         let (key, value) = parse_line(line?)?;
         clitics_map.insert(key, value);
     }
+    clitics_map.shrink_to_fit();
 
     Ok(clitics_map)
 }

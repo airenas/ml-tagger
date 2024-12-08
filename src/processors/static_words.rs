@@ -23,6 +23,7 @@ impl StaticWords {
             let v = to_word_mi(value.as_str());
             vocab.insert(key, v);
         }
+        vocab.shrink_to_fit();
         let res = StaticWords { vocab };
         Ok(res)
     }

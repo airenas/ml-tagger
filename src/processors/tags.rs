@@ -22,6 +22,7 @@ impl TagsMapper {
             vocab_lookup.insert(index as i32, tag);
         }
         log::info!("loaded vocab len {}", vocab_lookup.len());
+        vocab_lookup.shrink_to_fit();
 
         let res = TagsMapper {
             vocab: vocab_lookup,

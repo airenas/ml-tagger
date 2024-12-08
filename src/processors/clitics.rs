@@ -56,7 +56,7 @@ fn read_clitics_file(filename: &str) -> anyhow::Result<HashMap<String, Vec<Strin
         let (key, value) = parse_line(line?)?;
         clitics_map.insert(key, value);
     }
-
+    clitics_map.shrink_to_fit();
     Ok(clitics_map)
 }
 
