@@ -7,7 +7,7 @@ base=f1
 #################################################################
 prepare/bin:
 	docker run -it --rm -d --name ml-dev --entrypoint sh airenas/ml-tagger:$(version)
-	docker cp ml-dev:/app/ml-tagger-ws ./ml-tagger-wsexit
+	docker cp ml-dev:/app/ml-tagger-ws ./ml-tagger-ws
 	docker stop ml-dev
 #################################################################
 prepare/pproof:
