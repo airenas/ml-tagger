@@ -1,7 +1,7 @@
 #########################################################################################
 ## docker will invoke this file from ../.. dir in order to access code
 #########################################################################################
-FROM rust:1.83-bookworm AS builder
+FROM rust:1.91-bookworm AS builder
 
 # RUN apk --update add openssl-dev musl-dev
 
