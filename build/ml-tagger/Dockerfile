@@ -7,6 +7,9 @@ FROM rust:1.83-bookworm AS builder
 
 ARG BUILD_VERSION=0.1
 
+ENV RUSTFLAGS="-C target-cpu=haswell -C opt-level=3 -C codegen-units=1"
+ENV CARGO_PROFILE_RELEASE_DEBUG=false
+
 WORKDIR /src/
 
 COPY ./ /src
