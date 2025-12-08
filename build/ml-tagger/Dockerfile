@@ -3,7 +3,8 @@
 #########################################################################################
 FROM rust:1.91-bookworm AS builder
 
-# RUN apk --update add openssl-dev musl-dev
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends  binutils
 
 ARG BUILD_VERSION=0.1
 
@@ -16,10 +17,15 @@ COPY ./ /src
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
       CARGO_APP_VERSION=$BUILD_VERSION cargo build --release
+RUN strip /src/target/release/ml-tagger-ws      
 #########################################################################################
 FROM debian:bookworm-slim AS runner
 
-RUN apt-get update && apt-get -y install binutils ca-certificates openssl 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends  binutils \
+    ca-certificates \
+    openssl && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV UID=999
 
@@ -29,6 +35,7 @@ WORKDIR /app
 EXPOSE 8000
 
 RUN addgroup --gid $UID app && useradd -r -M -u $UID -g app app   
+COPY LICENSE /licenses/LICENSE
 RUN mkdir -p /app && chown -R app:app /app   
 
 COPY --from=builder /src/target/release/ml-tagger-ws /app/

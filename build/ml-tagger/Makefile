@@ -12,7 +12,7 @@ ifeq ($(debug),true)
 	echo "DEBUG MODE"
 	cd ../.. && docker buildx build -t $(tag)-debug --build-arg BUILD_VERSION=$(version)-debug -f build/ml-tagger/Dockerfile.debug .
 else
-	cd ../.. && docker buildx build -t $(tag) --build-arg BUILD_VERSION=$(version) -f build/ml-tagger/Dockerfile .
+	cd ../.. && docker buildx build -t $(tag) --build-arg BUILD_VERSION=$(version) -f build/ml-tagger/Dockerfile . --load
 endif	
 
 dpush: dbuild
