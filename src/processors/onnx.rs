@@ -1,4 +1,4 @@
-use ndarray::Array;
+use ndarray::{Array, ArrayView, Ix3};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use std::env;
@@ -31,6 +31,7 @@ impl OnnxWrapper {
         let model = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .with_inter_threads(threads as usize)?
+            .with_intra_threads(threads as usize)?
             .commit_from_file(file_str)?;
 
         show_info(&model)?;
@@ -43,10 +44,7 @@ impl OnnxWrapper {
             ));
         }
 
-        let res = OnnxWrapper {
-            model,
-            emb_dim,
-        };
+        let res = OnnxWrapper { model, emb_dim };
         Ok(res)
     }
 }
@@ -105,19 +103,30 @@ fn get_dim(model: &Session) -> anyhow::Result<usize> {
 impl Processor for OnnxWrapper {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("onnx");
+        let mut combined_data: Vec<f32> = Vec::with_capacity(30 * self.emb_dim);
         for sent in ctx.sentences.iter_mut() {
             let count = sent.iter().filter(|x| x.is_word).count();
-            let mut combined_data: Vec<f32> = Vec::with_capacity(count * self.emb_dim);
+            combined_data.clear();
+            if count > combined_data.capacity() / self.emb_dim {
+                combined_data
+                    .reserve((count - combined_data.capacity() / self.emb_dim) * self.emb_dim);
+            }
+
             for word_info in sent.iter() {
                 if word_info.is_word {
-                    if let Some(emb) = &word_info.embeddings { 
-                        combined_data.extend(emb.iter()) 
+                    if let Some(emb) = &word_info.embeddings {
+                        combined_data.extend_from_slice(emb)
                     } else {
                         return Err(anyhow::anyhow!("Missing embeddings"));
                     }
                 }
             }
-            let input_tensor = Array::from_shape_vec((1, count, self.emb_dim), combined_data)?;
+            let input_tensor: ArrayView<f32, Ix3> = ArrayView::from_shape(
+                (1, count, self.emb_dim),
+                &combined_data[..count * self.emb_dim],
+            )?;
+
+            // let input_tensor = Array::from_shape_vec((1, count, self.emb_dim), combined_data)?;
             let outputs = self.model.run(ort::inputs![input_tensor]?)?;
             let shape = outputs[0].shape();
             log::trace!("Output shape: {:?}", shape);
