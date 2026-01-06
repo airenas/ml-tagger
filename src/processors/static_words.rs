@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings::is_number;
+use crate::{MATH_SYMBOLS, SYMBOLS};
 
 pub struct StaticWords {
     vocab: HashMap<String, Arc<Vec<WorkMI>>>,
@@ -112,6 +113,18 @@ fn init_vocab() -> anyhow::Result<HashMap<String, String>> {
     ]);
     for o in ["|", "\\", "*", "%", "^", "$", "•", "+", "§"] {
         res_map.insert(o.to_string(), "Tx".to_string());
+    }
+    for o in SYMBOLS.chars() {
+        // do not overwrite above values
+        if !res_map.contains_key(&o.to_string()) {
+            res_map.insert(o.to_string(), "Tx".to_string());
+        }
+    }
+    for o in MATH_SYMBOLS.chars() {
+        // do not overwrite above values
+        if !res_map.contains_key(&o.to_string()) {
+            res_map.insert(o.to_string(), "Tx".to_string());
+        }
     }
     Ok(res_map)
 }

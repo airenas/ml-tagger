@@ -8,7 +8,7 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
-use crate::{MI_EMAIL, MI_URL};
+use crate::{MATH_SYMBOLS, MI_EMAIL, MI_URL, SYMBOLS};
 use crate::handlers::data::{Processor, WordKind, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
@@ -29,12 +29,15 @@ struct LexResponse {
 }
 
 const ADDITIONAL_SPLITTERS: &str = "-‘\"–‑/:;`−≤≥⁰'§";
-const URL_PLACEHOLDER: &str = "<url>";
+const URL_PLACEHOLDER: &str = "_URL_";
 
 impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
         log::info!("lex url: {url_str}");
-        let additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
+        let mut additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
+        additional_split.extend(SYMBOLS.chars());
+        additional_split.extend(MATH_SYMBOLS.chars());
+
 
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = Client::builder()
@@ -54,7 +57,7 @@ impl Lexer {
         Ok(res)
     }
 
-    async fn split(&self, text: &str) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
+    async fn split(&self, text: &str, url_placeholder: &str) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
         let client = self.client.lock().await;
@@ -73,7 +76,7 @@ impl Lexer {
                 .json()
                 .await
                 .map_err(|err| anyhow::anyhow!("failed to deserialize response: {}", err))?;
-            let res = self.convert(resp_res, text)?;
+            let res = self.convert(resp_res, text, url_placeholder)?;
             return Ok(res);
         };
         let status = response.status().as_u16();
@@ -90,6 +93,7 @@ impl Lexer {
         &self,
         resp_res: LexResponse,
         text: &str,
+        url_placeholder: &str,
     ) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let seg: Vec<(i32, i32, i32)> = group_sentences(resp_res)?;
         let mut res: Vec<Vec<(String, bool)>> = Vec::new();
@@ -110,7 +114,7 @@ impl Lexer {
                 let s: String = chars.iter().collect();
                 current.push((s, false)); // spaces
             }
-            let words = get_string(&chars, v.0 as usize, v.1 as usize, &self.additional_split);
+            let words = get_string(&chars, v.0 as usize, v.1 as usize, &self.additional_split, url_placeholder);
             for w in words {
                 current.push((w, true)); // words
             }
@@ -128,6 +132,7 @@ fn get_string(
     v_1: usize,
     v_2: usize,
     additional_split: &HashSet<char>,
+    url_placeholder: &str,
 ) -> Vec<String> {
     let chars: Vec<char> = text[v_1..v_2].to_vec();
     let s: String = chars.iter().collect();
@@ -135,6 +140,9 @@ fn get_string(
         return vec![s];
     }
     if strings::is_number(s.as_str()) {
+        return vec![s];
+    }
+    if s == url_placeholder {
         return vec![s];
     }
     // if strings::is_url(s.as_str()) {
@@ -197,7 +205,7 @@ impl Processor for Lexer {
         let (txt, url_placeholder) = text_without_urls(ctx);
 
         let sentences = self
-            .split(&txt)
+            .split(&txt, &url_placeholder)
             .await
             .map_err(|err| anyhow::anyhow!("lex failure: {}", err))?;
         let mut link_pos = 0;
@@ -222,6 +230,13 @@ impl Processor for Lexer {
                 }));
             }
             ctx.sentences.push(work_sentence);
+        }
+        if link_pos != ctx.links.len() {
+            tracing::warn!(
+                "Some links were not inserted into text: {}/{}",
+                link_pos,
+                ctx.links.len()
+            );
         }
 
         Ok(())
@@ -248,7 +263,7 @@ fn text_without_urls(ctx: &WorkContext) -> (String, String) {
     let mut result = String::new();
     let mut placeholder = URL_PLACEHOLDER.to_string();
     while ctx.text.contains(&placeholder) {
-        placeholder = placeholder.replace(">", "_>");
+        placeholder = placeholder + "_";
     }
 
     let mut last_index = 0;
