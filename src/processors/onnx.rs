@@ -1,6 +1,7 @@
-use ndarray::{Array, ArrayView, Ix3};
+use ndarray::{ArrayView, Ix3};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
+use tokio::sync::Mutex;
 use std::env;
 
 use async_trait::async_trait;
@@ -11,6 +12,7 @@ use crate::utils::perf::PerfLogger;
 pub struct OnnxWrapper {
     emb_dim: usize,
     model: Session,
+    combined_data: Mutex<Vec<f32>>
 }
 
 impl OnnxWrapper {
@@ -44,7 +46,7 @@ impl OnnxWrapper {
             ));
         }
 
-        let res = OnnxWrapper { model, emb_dim };
+        let res = OnnxWrapper { model, emb_dim, combined_data: Mutex::new(Vec::new()) };
         Ok(res)
     }
 }
@@ -103,13 +105,15 @@ fn get_dim(model: &Session) -> anyhow::Result<usize> {
 impl Processor for OnnxWrapper {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("onnx");
-        let mut combined_data: Vec<f32> = Vec::with_capacity(30 * self.emb_dim);
+        let mut combined_data = self.combined_data.lock().await;
+        // let mut combined_data: Vec<f32> = Vec::with_capacity(30 * self.emb_dim);
         for sent in ctx.sentences.iter_mut() {
             let count = sent.iter().filter(|x| x.is_word).count();
             combined_data.clear();
-            if count > combined_data.capacity() / self.emb_dim {
+            let cap = combined_data.capacity() / self.emb_dim;
+            if count > cap {
                 combined_data
-                    .reserve((count - combined_data.capacity() / self.emb_dim) * self.emb_dim);
+                    .reserve((count - cap) * self.emb_dim);
             }
 
             for word_info in sent.iter() {
