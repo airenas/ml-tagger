@@ -263,7 +263,7 @@ fn text_without_urls(ctx: &WorkContext) -> (String, String) {
     let mut result = String::new();
     let mut placeholder = URL_PLACEHOLDER.to_string();
     while ctx.text.contains(&placeholder) {
-        placeholder = placeholder + "_";
+        placeholder += "_";
     }
 
     let mut last_index = 0;

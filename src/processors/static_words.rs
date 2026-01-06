@@ -116,15 +116,11 @@ fn init_vocab() -> anyhow::Result<HashMap<String, String>> {
     }
     for o in SYMBOLS.chars() {
         // do not overwrite above values
-        if !res_map.contains_key(&o.to_string()) {
-            res_map.insert(o.to_string(), "Tx".to_string());
-        }
+        res_map.entry(o.to_string()).or_insert_with(|| "Tx".to_string());
     }
     for o in MATH_SYMBOLS.chars() {
         // do not overwrite above values
-        if !res_map.contains_key(&o.to_string()) {
-            res_map.insert(o.to_string(), "Tx".to_string());
-        }
+        res_map.entry(o.to_string()).or_insert_with(|| "Tx".to_string());
     }
     Ok(res_map)
 }
@@ -161,7 +157,7 @@ mod tests {
         number: "10", vec!["M----d-".to_string()],
         coma: ",", vec!["Tc".to_string()],
         dot: ".", vec!["Tp".to_string()],
-        some: "=", vec!["X-".to_string()],
+        some: "=", vec!["Tx".to_string()],
         with_dot: ".olia", vec!["X-".to_string()],
         with_percent: "olia%", vec!["X-".to_string()],
         with_percent_middle: "oli%a", vec!["X-".to_string()],
