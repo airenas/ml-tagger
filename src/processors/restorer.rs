@@ -144,20 +144,20 @@ fn parse_line(line: String) -> anyhow::Result<(String, CliticMap<'static>)> {
     Err(anyhow::anyhow!("failed parse line: {}", line))
 }
 
-fn half_change(pos: char, predited: char, t: char, i: usize) -> bool {
+fn half_change(pos: char, predicted: char, t: char, i: usize) -> bool {
     match pos {
         'N' => {
-            if (i == 2 && predited == 'f' && t == 'c') || (i == 3 && predited == 'p' && t == 'd') {
+            if (i == 2 && predicted == 'f' && t == 'c') || (i == 3 && predicted == 'p' && t == 'd') {
                 return true;
             }
         }
         'A' => {
-            if (i == 3 && predited == 'f' && t == 'n') || (i == 4 && predited == 'p' && t == 'd') {
+            if (i == 3 && predicted == 'f' && t == 'n') || (i == 4 && predicted == 'p' && t == 'd') {
                 return true;
             }
         }
         'P' => {
-            if i == 3 && predited == 'p' && t == 'd' {
+            if i == 3 && predicted == 'p' && t == 'd' {
                 return true;
             }
         }

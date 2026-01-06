@@ -10,6 +10,8 @@ use crate::utils::strings::is_number;
 
 pub struct StaticWords {
     vocab: HashMap<String, Arc<Vec<WorkMI>>>,
+    numeric_mi: Arc<Vec<WorkMI>>,
+    x_mi: Arc<Vec<WorkMI>>,
 }
 
 impl StaticWords {
@@ -24,22 +26,26 @@ impl StaticWords {
             vocab.insert(key, v);
         }
         vocab.shrink_to_fit();
-        let res = StaticWords { vocab };
+        let res = StaticWords {
+            vocab,
+            numeric_mi: to_word_mi("M----d-"),
+            x_mi: to_word_mi("X-"),
+        };
         Ok(res)
     }
 
     fn try_find(&self, w: &str) -> Option<Arc<Vec<WorkMI>>> {
         if is_number(w) {
-            return Some(to_word_mi("M----d-")); // TODO make static
+            return Some(self.numeric_mi.clone());
         }
         if let Some(s) = self.vocab.get(w) {
-            return Some(s.clone()); // TODO make static
+            return Some(s.clone());
         }
         if starts_with_nonalpha_num(w) {
-            return Some(to_word_mi("X-")); // TODO make static
+            return Some(self.x_mi.clone());
         }
-        if w.len()  > 1 && w.contains('%') {
-            return Some(to_word_mi("X-")); // TODO make static
+        if w.len() > 1 && w.contains('%') {
+            return Some(self.x_mi.clone());
         }
         None
     }

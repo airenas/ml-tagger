@@ -13,6 +13,9 @@ use crate::{
     utils::perf::PerfLogger,
 };
 
+const EMAIL_WORD: &str = "<email>";
+const URL_WORD: &str = "<url>";
+
 pub struct FinalFusionWrapper {
     embeds: Embeddings<VocabWrap, StorageWrap>,
     cache: Cache<String, Arc<Vec<f32>>>,
@@ -50,12 +53,12 @@ impl Processor for FinalFusionWrapper {
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
-                    let mut w = word_info.w.as_str();
-                    if word_info.kind == crate::handlers::data::WordKind::Email {
-                        w = "<email>";
-                    } else if word_info.kind == crate::handlers::data::WordKind::Url {
-                        w = "<url>";
-                    }
+                    let w =
+                        match word_info.kind {
+                            crate::handlers::data::WordKind::Email => EMAIL_WORD,
+                            crate::handlers::data::WordKind::Url => URL_WORD,
+                            _ => &word_info.w,
+                        };
                     let emb = self.cache.get(w).await;
                     if let Some(val) = emb {
                         tracing::trace!(word = w, "in emb cache");

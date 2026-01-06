@@ -85,7 +85,7 @@ impl LemmatizeWordsMapper {
                 let new_value = self
                     .make_request(key)
                     .await
-                    .map_err(|err| anyhow::anyhow!("lemma failure: {}", err))?;
+                    .map_err(|err| anyhow::anyhow!("lemma failure: {:?}", err))?;
                 if let Some(val) = new_value {
                     let a_val = Arc::new(val);
                     *value = Some(a_val.clone());
@@ -162,8 +162,8 @@ impl Processor for LemmatizeWordsMapper {
         let _perf_log = PerfLogger::new("lemmatize words");
         let mut words_map: HashMap<String, Option<Arc<Vec<WorkMI>>>> = HashMap::new();
 
-        for sent in ctx.sentences.iter_mut() {
-            for word_info in sent.iter_mut() {
+        for sent in ctx.sentences.iter() {
+            for word_info in sent.iter() {
                 if word_info.is_word && word_info.mis.is_none() && word_info.mi.is_none() {
                     words_map.insert(word_info.w.clone(), None);
                 }

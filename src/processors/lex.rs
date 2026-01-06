@@ -8,6 +8,7 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
+use crate::{MI_EMAIL, MI_URL};
 use crate::handlers::data::{Processor, WordKind, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
@@ -193,7 +194,7 @@ fn group_sentences(resp_res: LexResponse) -> anyhow::Result<Vec<(i32, i32, i32)>
 impl Processor for Lexer {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lex text");
-        let (txt, url_placeholder) = text_without_urls(&ctx);
+        let (txt, url_placeholder) = text_without_urls(ctx);
 
         let sentences = self
             .split(&txt)
@@ -237,8 +238,8 @@ fn to_kind(kind: &linkify::LinkKind) -> WordKind {
 
 fn to_mi(kind: &linkify::LinkKind) -> String {
     match kind {
-        linkify::LinkKind::Url => "Dl".to_string(),
-        linkify::LinkKind::Email => "De".to_string(),
+        linkify::LinkKind::Url => MI_URL.to_string(),
+        linkify::LinkKind::Email => MI_EMAIL.to_string(),
         _ => "".to_string(),
     }
 }
