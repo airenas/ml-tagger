@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use linkify::LinkKind;
 use serde::{Deserialize, Serialize};
 
 use super::error::ApiError;
@@ -9,7 +10,15 @@ pub struct WorkContext {
     pub params: TagParams,
     pub embeddings: Vec<f32>,
     pub text: String,
+    pub links : Vec<Link>,
     pub sentences: Vec<Vec<WorkWord>>,
+}
+
+#[derive(Debug)]
+pub struct Link {
+    pub start: usize,
+    pub end: usize,
+    pub kind: LinkKind,
 }
 
 #[derive(Clone)]
@@ -36,12 +45,21 @@ impl WordType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WordKind{
+    None,
+    Word,
+    Email,
+    Url,
+}
+
 pub struct WorkWord {
     pub w: String,
     pub is_word: bool,
     pub mi: Option<String>,
     pub lemma: Option<String>,
     pub w_type: WordType,
+    pub kind : WordKind,
     pub embeddings: Option<Arc<Vec<f32>>>,
     pub predicted: Option<i32>,
     pub predicted_str: Option<String>,
@@ -54,6 +72,7 @@ pub trait Processor {
 }
 
 pub struct Service {
+    pub url_finder: Box<dyn Processor + Send + Sync>,
     pub lexer: Box<dyn Processor + Send + Sync>,
     pub embedder: Box<dyn Processor + Send + Sync>,
     pub onnx: Box<dyn Processor + Send + Sync>,
@@ -113,6 +132,7 @@ impl WorkContext {
             text,
             embeddings: Vec::<f32>::new(),
             sentences: Vec::<Vec<WorkWord>>::new(),
+            links : Vec::<Link>::new(),
         }
     }
 }
@@ -129,6 +149,17 @@ impl WorkWord {
             predicted: None,
             predicted_str: None,
             mis: None,
+            kind : WordKind::None,
         }
+    }
+
+    pub fn with_mi(mut self, mi: String) -> WorkWord {
+        self.mi = Some(mi);
+        self
+    }
+
+    pub fn with_kind(mut self, kind: WordKind) -> WorkWord {
+        self.kind = kind;
+        self
     }
 }

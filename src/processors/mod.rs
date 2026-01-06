@@ -9,3 +9,4 @@ pub mod lex;
 pub mod metrics;
 pub mod predict;
 pub mod embedding_ff;
+pub mod url_finder;

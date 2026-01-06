@@ -113,6 +113,10 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         tracing::debug!("expected drop tx_close");
     });
 
+
+    let url_finder = processors::url_finder::Finder::new()?;
+    let boxed_url_finder: Box<dyn data::Processor + Send + Sync> = Box::new(url_finder);
+
     let lexer = processors::lex::Lexer::new(&cfg.lex_url)?;
     let boxed_lexer: Box<dyn data::Processor + Send + Sync> = Box::new(lexer);
 
@@ -176,6 +180,7 @@ async fn main_int(cfg: Args) -> anyhow::Result<()> {
         restorer: boxed_restorer,
         static_words: boxed_statics,
         lexer: boxed_lexer,
+        url_finder: boxed_url_finder,
     }));
 
     let metrics = Metrics::new()?;

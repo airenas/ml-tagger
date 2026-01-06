@@ -30,7 +30,7 @@ impl Processor for Clitics {
         let _perf_log = PerfLogger::new("clitics mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word {
+                if word_info.is_word && word_info.mi.is_none() {
                     if let Some(res) = self.vocab.get(&word_info.w.to_lowercase()) {
                         word_info.mis = Some(Arc::new(
                             res.iter()

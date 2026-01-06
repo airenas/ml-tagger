@@ -25,6 +25,9 @@ pub async fn handler(
     let mut ctx = WorkContext::new(params, string_body.trim().to_string());
 
     let srv = srv_wrap.read().await;
+
+    srv.url_finder.process(&mut ctx).await.context("url find")?;
+
     srv.lexer.process(&mut ctx).await.context("lex")?;
 
     let cw: usize = ctx.sentences.iter().map(|f| f.len()).sum();

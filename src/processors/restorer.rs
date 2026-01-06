@@ -53,7 +53,7 @@ impl Processor for Restorer<'_> {
         let _perf_log = PerfLogger::new("restorer mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word {
+                if word_info.is_word && word_info.mi.is_none(){
                     let (mi, lemma) = self.restore(word_info)?;
                     word_info.mi = mi;
                     word_info.lemma = lemma;

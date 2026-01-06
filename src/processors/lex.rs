@@ -8,7 +8,7 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
-use crate::handlers::data::{Processor, WorkContext, WorkWord};
+use crate::handlers::data::{Processor, WordKind, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -27,7 +27,8 @@ struct LexResponse {
     // p: Vec<Vec<i32>>,
 }
 
-const ADDITIONAL_SPLITTERS: &str = "-‘\"–‑/:;`−≤≥⁰'";
+const ADDITIONAL_SPLITTERS: &str = "-‘\"–‑/:;`−≤≥⁰'§";
+const URL_PLACEHOLDER: &str = "<url>";
 
 impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
@@ -135,12 +136,12 @@ fn get_string(
     if strings::is_number(s.as_str()) {
         return vec![s];
     }
-    if strings::is_url(s.as_str()) {
-        return vec![s];
-    }
-    if strings::is_email(s.as_str()) {
-        return vec![s];
-    }
+    // if strings::is_url(s.as_str()) {
+    //     return vec![s];
+    // }
+    // if strings::is_email(s.as_str()) {
+    //     return vec![s];
+    // }
     try_split(&chars, additional_split)
 }
 
@@ -192,20 +193,75 @@ fn group_sentences(resp_res: LexResponse) -> anyhow::Result<Vec<(i32, i32, i32)>
 impl Processor for Lexer {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lex text");
+        let (txt, url_placeholder) = text_without_urls(&ctx);
+
         let sentences = self
-            .split(&ctx.text)
+            .split(&txt)
             .await
             .map_err(|err| anyhow::anyhow!("lex failure: {}", err))?;
+        let mut link_pos = 0;
         for sentence in sentences {
             let mut work_sentence = Vec::<WorkWord>::new();
             for (w, is_word) in sentence {
-                work_sentence.push(WorkWord::new(w, is_word));
+                if w == url_placeholder && link_pos < ctx.links.len() {
+                    let link = &ctx.links[link_pos];
+                    let linkw = &ctx.text[link.start..link.end];
+                    link_pos += 1;
+                    work_sentence.push(
+                        WorkWord::new(linkw.to_string(), is_word)
+                            .with_kind(to_kind(&link.kind))
+                            .with_mi(to_mi(&link.kind)),
+                    );
+                    continue;
+                }
+                work_sentence.push(WorkWord::new(w, is_word).with_kind(if is_word {
+                    WordKind::Word
+                } else {
+                    WordKind::None
+                }));
             }
             ctx.sentences.push(work_sentence);
         }
 
         Ok(())
     }
+}
+
+fn to_kind(kind: &linkify::LinkKind) -> WordKind {
+    match kind {
+        linkify::LinkKind::Url => WordKind::Url,
+        linkify::LinkKind::Email => WordKind::Email,
+        _ => WordKind::None,
+    }
+}
+
+fn to_mi(kind: &linkify::LinkKind) -> String {
+    match kind {
+        linkify::LinkKind::Url => "Dl".to_string(),
+        linkify::LinkKind::Email => "De".to_string(),
+        _ => "".to_string(),
+    }
+}
+
+fn text_without_urls(ctx: &WorkContext) -> (String, String) {
+    let mut result = String::new();
+    let mut placeholder = URL_PLACEHOLDER.to_string();
+    while ctx.text.contains(&placeholder) {
+        placeholder = placeholder.replace(">", "_>");
+    }
+
+    let mut last_index = 0;
+    for link in &ctx.links {
+        if link.start > last_index {
+            result.push_str(&ctx.text[last_index..link.start]);
+        }
+        result.push_str(placeholder.as_str());
+        last_index = link.end;
+    }
+    if last_index < ctx.text.len() {
+        result.push_str(&ctx.text[last_index..]);
+    }
+    (result, placeholder)
 }
 
 #[cfg(test)]

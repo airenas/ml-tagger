@@ -50,7 +50,12 @@ impl Processor for FinalFusionWrapper {
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
                 if word_info.is_word {
-                    let w = &word_info.w;
+                    let mut w = word_info.w.as_str();
+                    if word_info.kind == crate::handlers::data::WordKind::Email {
+                        w = "<email>";
+                    } else if word_info.kind == crate::handlers::data::WordKind::Url {
+                        w = "<url>";
+                    }
                     let emb = self.cache.get(w).await;
                     if let Some(val) = emb {
                         tracing::trace!(word = w, "in emb cache");
@@ -66,7 +71,7 @@ impl Processor for FinalFusionWrapper {
                             .to_vec();
                         let val = Arc::new(embedding);
                         word_info.embeddings = Some(val.clone());
-                        self.cache.insert(w.clone(), val).await;
+                        self.cache.insert(w.to_string(), val).await;
                     }
                 }
             }

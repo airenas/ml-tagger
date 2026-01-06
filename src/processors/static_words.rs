@@ -63,7 +63,7 @@ impl Processor for StaticWords {
         let _perf_log = PerfLogger::new("statics mapper");
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word && word_info.mis.is_none() {
+                if word_info.is_word && word_info.mis.is_none() && word_info.mi.is_none() {
                     word_info.mis = self.try_find(&word_info.w.to_lowercase());
                 }
             }
@@ -104,7 +104,7 @@ fn init_vocab() -> anyhow::Result<HashMap<String, String>> {
         to_e("‘", "Tu"),
         to_e("\"", "Tu"),
     ]);
-    for o in ["|", "\\", "*", "%", "^", "$", "•", "+"] {
+    for o in ["|", "\\", "*", "%", "^", "$", "•", "+", "§"] {
         res_map.insert(o.to_string(), "Tx".to_string());
     }
     Ok(res_map)

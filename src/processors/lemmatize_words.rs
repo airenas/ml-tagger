@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -73,7 +74,7 @@ impl LemmatizeWordsMapper {
     ) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("lemmatizing");
         for (key, value) in map.iter_mut() {
-            let cv = self.cache.get(key).await;
+            let cv = self.cache.get(key.deref()).await;
             if let Some(val) = cv {
                 log::debug!("in lemma cache: {key}");
                 *value = Some(val);
@@ -88,7 +89,7 @@ impl LemmatizeWordsMapper {
                 if let Some(val) = new_value {
                     let a_val = Arc::new(val);
                     *value = Some(a_val.clone());
-                    self.cache.insert(key.clone(), a_val).await;
+                    self.cache.insert(key.to_string(), a_val).await;
                 }
             }
         }
@@ -163,7 +164,7 @@ impl Processor for LemmatizeWordsMapper {
 
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word && word_info.mis.is_none() {
+                if word_info.is_word && word_info.mis.is_none() && word_info.mi.is_none() {
                     words_map.insert(word_info.w.clone(), None);
                 }
             }
@@ -171,8 +172,8 @@ impl Processor for LemmatizeWordsMapper {
         self.lemmatize(&mut words_map).await?;
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word && word_info.mis.is_none() {
-                    match words_map.get(&word_info.w) {
+                if word_info.is_word && word_info.mis.is_none() && word_info.mi.is_none() {
+                    match words_map.get(word_info.w.as_str()) {
                         Some(res) => {
                             if res.is_some() {
                                 word_info.mis.clone_from(res);
