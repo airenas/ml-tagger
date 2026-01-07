@@ -95,6 +95,7 @@ pub struct LiveResponse {
 #[derive(Deserialize)]
 pub struct TagParams {
     pub debug: Option<String>,
+    pub skip_model: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -161,5 +162,11 @@ impl WorkWord {
     pub fn with_kind(mut self, kind: WordKind) -> WorkWord {
         self.kind = kind;
         self
+    }
+}
+
+impl TagParams {
+    pub fn skip_model(&self) -> bool {
+        self.skip_model.unwrap_or_default()
     }
 }

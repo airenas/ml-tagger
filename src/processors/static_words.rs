@@ -3,15 +3,20 @@ use std::sync::Arc;
 
 use anyhow::Ok;
 use async_trait::async_trait;
+use linkify::LinkFinder;
 
 use crate::handlers::data::{Processor, WorkContext, WorkMI};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings::is_number;
+use crate::{MATH_SYMBOLS, MI_EMAIL, MI_URL, SYMBOLS};
 
 pub struct StaticWords {
     vocab: HashMap<String, Arc<Vec<WorkMI>>>,
+
     numeric_mi: Arc<Vec<WorkMI>>,
     x_mi: Arc<Vec<WorkMI>>,
+    email_mi: Arc<Vec<WorkMI>>,
+    url_mi: Arc<Vec<WorkMI>>,
 }
 
 impl StaticWords {
@@ -30,6 +35,8 @@ impl StaticWords {
             vocab,
             numeric_mi: to_word_mi("M----d-"),
             x_mi: to_word_mi("X-"),
+            email_mi: to_word_mi(MI_EMAIL),
+            url_mi: to_word_mi(MI_URL),
         };
         Ok(res)
     }
@@ -40,6 +47,21 @@ impl StaticWords {
         }
         if let Some(s) = self.vocab.get(w) {
             return Some(s.clone());
+        }
+
+        let mut finder = LinkFinder::new();
+        finder.url_must_have_scheme(false);
+        let links: Vec<_> = finder.links(w).collect();
+        if links.len() == 1 {
+            let link = &links[0];
+            if link.start() == 0 && link.end() == w.len() {
+                if matches!(link.kind(), linkify::LinkKind::Url) {
+                    return Some(self.url_mi.clone());
+                }
+                if matches!(link.kind(), linkify::LinkKind::Email) {
+                    return Some(self.email_mi.clone());
+                }
+            }
         }
         if starts_with_nonalpha_num(w) {
             return Some(self.x_mi.clone());
@@ -113,6 +135,18 @@ fn init_vocab() -> anyhow::Result<HashMap<String, String>> {
     for o in ["|", "\\", "*", "%", "^", "$", "•", "+", "§"] {
         res_map.insert(o.to_string(), "Tx".to_string());
     }
+    for o in SYMBOLS.chars() {
+        // do not overwrite above values
+        res_map
+            .entry(o.to_string())
+            .or_insert_with(|| "Tx".to_string());
+    }
+    for o in MATH_SYMBOLS.chars() {
+        // do not overwrite above values
+        res_map
+            .entry(o.to_string())
+            .or_insert_with(|| "Tx".to_string());
+    }
     Ok(res_map)
 }
 
@@ -124,7 +158,12 @@ mod tests {
     fn test_try_find(input: &str, expected: Vec<String>) {
         let p = StaticWords::new().unwrap();
         let mut res: Vec<String> = Vec::new();
-        for v in p.try_find(input).unwrap().iter().cloned() {
+        let got = p.try_find(input);
+        if got.is_none() {      
+            assert_eq!(expected.len(), 0, "try_find '{}'", input);
+            return;
+        }
+        for v in got.unwrap().iter().cloned() {
             res.push(v.mi.unwrap());
         }
         assert_eq!(res, expected);
@@ -148,10 +187,18 @@ mod tests {
         number: "10", vec!["M----d-".to_string()],
         coma: ",", vec!["Tc".to_string()],
         dot: ".", vec!["Tp".to_string()],
-        some: "=", vec!["X-".to_string()],
+        some: "=", vec!["Tx".to_string()],
         with_dot: ".olia", vec!["X-".to_string()],
         with_percent: "olia%", vec!["X-".to_string()],
         with_percent_middle: "oli%a", vec!["X-".to_string()],
         with_percent_start: "%olia", vec!["X-".to_string()],
+        url: "lrt.lt", vec!["Dl".to_string()],
+        email: "a@aa.lt", vec!["De".to_string()],
+        not_start: " lrt.lt", vec!["X-".to_string()],
+        not_end: "lrt.lt ", vec![],
+        several_links: "lrt.lt lrt.lt", vec![],
+        word: "mama", vec![],
+        symbol: "§", vec!["Tx".to_string()],
+        symbol_math: "⅞", vec!["Tx".to_string()],
     );
 }

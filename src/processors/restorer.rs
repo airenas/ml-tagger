@@ -13,6 +13,11 @@ use crate::utils::strings::is_number;
 type CliticMap<'a> = HashMap<(Cow<'a, str>, Cow<'a, str>), u32>;
 type FreqData<'a> = HashMap<String, CliticMap<'a>>;
 
+const EMPTY_MI: WorkMI = WorkMI {
+    mi: None,
+    lemma: None,
+};
+
 pub struct Restorer<'a> {
     frequency_vocab: FreqData<'a>,
 }
@@ -27,23 +32,41 @@ impl<'a> Restorer<'a> {
         Ok(res)
     }
 
-    fn restore(&self, word_info: &WorkWord) -> anyhow::Result<(Option<String>, Option<String>)> {
+    fn restore<'b>(&'a self, word_info: &'b WorkWord) -> anyhow::Result<&'b WorkMI> {
         if let Some(predicted) = &word_info.predicted_str {
             if let Some(mis) = word_info.mis.as_ref() {
                 if mis.len() == 1 {
                     let mi = mis.first().unwrap();
-                    return Ok((mi.mi.clone(), mi.lemma.clone()));
+                    return Ok(mi);
                 }
                 if mis.len() > 1 {
                     let freq_data = self.frequency_vocab.get(&word_info.w);
                     let mi = restore(mis, predicted, freq_data);
-                    return Ok((mi.mi, mi.lemma));
+                    return Ok(mi);
                 }
             }
-            Ok((None, Some(predicted.clone())))
+            Ok(&EMPTY_MI)
         } else {
             Err(anyhow::anyhow!("no prediction for: {}", word_info.w))
         }
+    }
+
+    fn find_most_frequent<'b>(
+        &'a self,
+        word_info: &'b WorkWord,
+    ) -> anyhow::Result<&'b WorkMI> {
+        if let Some(mis) = word_info.mis.as_ref() {
+            if mis.len() == 1 {
+                let mi = mis.first().unwrap();
+                return Ok(mi);
+            }
+            if mis.len() > 1 {
+                let freq_data = self.frequency_vocab.get(&word_info.w);
+                let mi = most_frequent(mis, freq_data);
+                return Ok(mi);
+            }
+        }
+        Ok(&EMPTY_MI)
     }
 }
 
@@ -51,12 +74,19 @@ impl<'a> Restorer<'a> {
 impl Processor for Restorer<'_> {
     async fn process(&self, ctx: &mut WorkContext) -> anyhow::Result<()> {
         let _perf_log = PerfLogger::new("restorer mapper");
+        let skip_model = ctx.params.skip_model();
         for sent in ctx.sentences.iter_mut() {
             for word_info in sent.iter_mut() {
-                if word_info.is_word && word_info.mi.is_none(){
-                    let (mi, lemma) = self.restore(word_info)?;
-                    word_info.mi = mi;
-                    word_info.lemma = lemma;
+                if word_info.is_word && word_info.mi.is_none() {
+                    let wi = if skip_model {
+                        self.find_most_frequent(word_info)?
+                    } else {
+                        self.restore(word_info)?
+                    };
+                    (word_info.mi, word_info.lemma) = (wi.mi.clone(), wi.lemma.clone());
+                    if word_info.mi.is_none() && word_info.predicted_str.is_some() {
+                        word_info.mi = word_info.predicted_str.clone();
+                    }
                 }
                 word_info.w_type = get_type(word_info);
             }
@@ -70,10 +100,11 @@ fn get_type(word_info: &WorkWord) -> WordType {
         return WordType::Space;
     }
     let w = word_info.w.as_str();
-    let mi = word_info.mi.as_deref().unwrap_or_default();
     if is_number(w) {
         return WordType::Number;
-    } else if is_sep(mi) {
+    }
+    let mi = word_info.mi.as_deref().unwrap_or_default();
+    if is_sep(mi) {
         return WordType::Separator;
     }
     WordType::Word
@@ -147,12 +178,14 @@ fn parse_line(line: String) -> anyhow::Result<(String, CliticMap<'static>)> {
 fn half_change(pos: char, predicted: char, t: char, i: usize) -> bool {
     match pos {
         'N' => {
-            if (i == 2 && predicted == 'f' && t == 'c') || (i == 3 && predicted == 'p' && t == 'd') {
+            if (i == 2 && predicted == 'f' && t == 'c') || (i == 3 && predicted == 'p' && t == 'd')
+            {
                 return true;
             }
         }
         'A' => {
-            if (i == 3 && predicted == 'f' && t == 'n') || (i == 4 && predicted == 'p' && t == 'd') {
+            if (i == 3 && predicted == 'f' && t == 'n') || (i == 4 && predicted == 'p' && t == 'd')
+            {
                 return true;
             }
         }
@@ -186,13 +219,9 @@ fn calc(p: &str, t: &str) -> f64 {
     res
 }
 
-fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&CliticMap>) -> WorkMI {
+fn restore<'a>(all: &'a Vec<WorkMI>, predicted: &str, freq_data: Option<&CliticMap>) -> &'a WorkMI {
+    let mut res: &WorkMI = &EMPTY_MI;
     let mut bv = 1000.0;
-    let empty_res = WorkMI {
-        mi: None,
-        lemma: None,
-    };
-    let mut res: &WorkMI = &empty_res;
     for t in all {
         let mut v = calc(predicted, t.mi.as_ref().map_or("", |f| f.as_str()));
         let freq_p = 0.001 / (get_freq(freq_data, &t.lemma, &t.mi) + 1.0);
@@ -202,7 +231,20 @@ fn restore(all: &Vec<WorkMI>, predicted: &str, freq_data: Option<&CliticMap>) ->
             res = t;
         }
     }
-    res.clone()
+    res
+}
+
+fn most_frequent<'a>(all: &'a Vec<WorkMI>, freq_data: Option<&CliticMap>) -> &'a WorkMI {
+    let mut res: &WorkMI = &EMPTY_MI;
+    let mut bv = -1.0;
+    for t in all {
+        let freq_p = get_freq(freq_data, &t.lemma, &t.mi);
+        if freq_p > bv {
+            bv = freq_p;
+            res = t;
+        }
+    }
+    res
 }
 
 fn get_freq(freq_data: Option<&CliticMap>, lemma: &Option<String>, mi: &Option<String>) -> f64 {
