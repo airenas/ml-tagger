@@ -43,8 +43,10 @@ pub async fn process_line(
     srv: &tokio::sync::RwLockReadGuard<'_, Service>,
     ctx: &mut WorkContext,
 ) -> anyhow::Result<()> {
-    srv.embedder.process(ctx).await?;
-    srv.onnx.process(ctx).await?;
+    if !ctx.params.skip_model() {
+        srv.embedder.process(ctx).await?;
+        srv.onnx.process(ctx).await?;
+    }       
     srv.tag_mapper.process(ctx).await?;
     srv.clitics.process(ctx).await?;
     srv.static_words.process(ctx).await?;
