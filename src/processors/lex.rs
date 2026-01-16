@@ -8,10 +8,10 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 
-use crate::{MATH_SYMBOLS, MI_EMAIL, MI_URL, SYMBOLS};
 use crate::handlers::data::{Processor, WordKind, WorkContext, WorkWord};
 use crate::utils::perf::PerfLogger;
 use crate::utils::strings;
+use crate::{MATH_SYMBOLS, MI_EMAIL, MI_URL, SYMBOLS};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use tokio::sync::Mutex;
 
@@ -34,10 +34,7 @@ const URL_PLACEHOLDER: &str = "_URL_";
 impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
         log::info!("lex url: {url_str}");
-        let mut additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
-        additional_split.extend(SYMBOLS.chars());
-        additional_split.extend(MATH_SYMBOLS.chars());
-
+        let additional_split = init_splitters();
 
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = Client::builder()
@@ -57,7 +54,11 @@ impl Lexer {
         Ok(res)
     }
 
-    async fn split(&self, text: &str, url_placeholder: &str) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
+    async fn split(
+        &self,
+        text: &str,
+        url_placeholder: &str,
+    ) -> anyhow::Result<Vec<Vec<(String, bool)>>> {
         let _perf_log = PerfLogger::new("call lex");
         log::info!("lex - text len:'{}'", text.len());
         let client = self.client.lock().await;
@@ -114,7 +115,13 @@ impl Lexer {
                 let s: String = chars.iter().collect();
                 current.push((s, false)); // spaces
             }
-            let words = get_string(&chars, v.0 as usize, v.1 as usize, &self.additional_split, url_placeholder);
+            let words = get_string(
+                &chars,
+                v.0 as usize,
+                v.1 as usize,
+                &self.additional_split,
+                url_placeholder,
+            );
             for w in words {
                 current.push((w, true)); // words
             }
@@ -125,6 +132,15 @@ impl Lexer {
         }
         Ok(res)
     }
+}
+
+fn init_splitters() -> HashSet<char> {
+    let mut res = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
+    res.extend(SYMBOLS.chars());
+    res.extend(MATH_SYMBOLS.chars());
+    res.remove(&'.'); // do not split on dots
+    res.shrink_to_fit();
+    res
 }
 
 fn get_string(
@@ -287,7 +303,8 @@ mod tests {
 
     fn test_try_split(input: &str, expected: Vec<String>) {
         let chars: Vec<char> = input.chars().collect();
-        let additional_split = HashSet::from_iter(ADDITIONAL_SPLITTERS.chars());
+        let additional_split = init_splitters();
+
         assert_eq!(try_split(&chars, &additional_split), expected);
     }
 
@@ -313,5 +330,7 @@ mod tests {
         split_other: "dvidešimtį≤≥⁰dvi", vec!["dvidešimtį".to_string(), "≤".to_string(),"≥".to_string(),"⁰".to_string(), "dvi".to_string()],
         split_last: "dvidešimtį-", vec!["dvidešimtį".to_string(), "-".to_string()],
         split_first: "-dvi", vec!["-".to_string(), "dvi".to_string()],
+        skip_dot_after_letter: "G.", vec!["G.".to_string()],
+        skip_dot_after_letters: "AR.", vec!["AR.".to_string()],
     );
 }
