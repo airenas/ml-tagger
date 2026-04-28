@@ -30,6 +30,7 @@ struct LexResponse {
 
 const ADDITIONAL_SPLITTERS: &str = "-‘\"–‑/:;`−≤≥⁰'§";
 const URL_PLACEHOLDER: &str = "_URL_";
+const URL_PLACEHOLDER_CHARS: &[char] = &['_', 'U', 'R', 'L', '_'];
 
 impl Lexer {
     pub fn new(url_str: &str) -> anyhow::Result<Lexer> {
@@ -173,7 +174,21 @@ fn get_string(
 fn try_split(chars: &[char], additional_split: &HashSet<char>) -> Vec<String> {
     let mut res = Vec::<String>::new();
     let mut last = 0;
+    let len_url = URL_PLACEHOLDER_CHARS.len();
+    let len = chars.len();
     for (index, ch) in chars.iter().enumerate() {
+        if index < last {
+            continue;
+        }   
+        if len - index >= len_url 
+            && &chars[index..index + len_url] == URL_PLACEHOLDER_CHARS {
+                if last != index {
+                    res.push(chars[last..index].iter().collect());
+                }
+                res.push(URL_PLACEHOLDER.to_string());
+                last = index + len_url;
+                continue;
+        }
         if additional_split.contains(ch) {
             if last != index {
                 res.push(chars[last..index].iter().collect());
@@ -332,5 +347,7 @@ mod tests {
         split_first: "-dvi", vec!["-".to_string(), "dvi".to_string()],
         skip_dot_after_letter: "G.", vec!["G.".to_string()],
         skip_dot_after_letters: "AR.", vec!["AR.".to_string()],
+        with_url: "olia__URL_", vec!["olia".to_string(), "_".to_string(), "_URL_".to_string()],
+        with_url_and_more: "olia__URL_oho", vec!["olia".to_string(), "_".to_string(), "_URL_".to_string(), "oho".to_string()],
     );
 }

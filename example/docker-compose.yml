@@ -27,7 +27,7 @@ services:
      - SECRET=${LEMA_SECRET}
 
   lex:
-    image: semantikadocker.vdu.lt/lex:latest
+    image: semantikadocker.vdu.lt/lex:2021.04.02
     # restart: unless-stopped
     ports:
      - "8091:8080"
