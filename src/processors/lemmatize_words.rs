@@ -97,6 +97,12 @@ impl LemmatizeWordsMapper {
     }
 
     async fn make_request(&self, key: &str) -> anyhow::Result<Option<Vec<WorkMI>>> {
+        if key.len() > 100 {
+            return Ok(Some(vec![WorkMI { 
+                lemma: None,
+                mi: Some(fix_empty_lemma_res(key)),
+            }]));
+        }
         let _perf_log = PerfLogger::new(format!("lemmatize '{}'", key).as_str());
         let url_str = make_url(self.url.as_str(), key);
         log::info!("call: {url_str}");

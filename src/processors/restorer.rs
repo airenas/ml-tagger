@@ -51,10 +51,7 @@ impl<'a> Restorer<'a> {
         }
     }
 
-    fn find_most_frequent<'b>(
-        &'a self,
-        word_info: &'b WorkWord,
-    ) -> anyhow::Result<&'b WorkMI> {
+    fn find_most_frequent<'b>(&'a self, word_info: &'b WorkWord) -> anyhow::Result<&'b WorkMI> {
         if let Some(mis) = word_info.mis.as_ref() {
             if mis.len() == 1 {
                 let mi = mis.first().unwrap();
@@ -177,22 +174,18 @@ fn parse_line(line: String) -> anyhow::Result<(String, CliticMap<'static>)> {
 
 fn half_change(pos: char, predicted: char, t: char, i: usize) -> bool {
     match pos {
-        'N' => {
-            if (i == 2 && predicted == 'f' && t == 'c') || (i == 3 && predicted == 'p' && t == 'd')
-            {
-                return true;
-            }
+        'N' if ((i == 2 && predicted == 'f' && t == 'c')
+            || (i == 3 && predicted == 'p' && t == 'd')) =>
+        {
+            return true;
         }
-        'A' => {
-            if (i == 3 && predicted == 'f' && t == 'n') || (i == 4 && predicted == 'p' && t == 'd')
-            {
-                return true;
-            }
+        'A' if ((i == 3 && predicted == 'f' && t == 'n')
+            || (i == 4 && predicted == 'p' && t == 'd')) =>
+        {
+            return true;
         }
-        'P' => {
-            if i == 3 && predicted == 'p' && t == 'd' {
-                return true;
-            }
+        'P' if i == 3 && predicted == 'p' && t == 'd' => {
+            return true;
         }
         _ => {}
     }
