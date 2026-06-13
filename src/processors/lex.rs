@@ -101,8 +101,9 @@ impl Lexer {
         let mut res: Vec<Vec<(String, bool)>> = Vec::new();
         let mut current: Vec<(String, bool)> = Vec::new();
         let chars: Vec<char> = text.chars().collect();
+        let utf16_to_char_map = build_utf16_to_char_map(text);
         let mut last_seen = 0;
-        let mut last_index = 0;
+        let mut last_index: usize = 0;
         for v in seg.iter() {
             if v.2 != last_seen {
                 if !current.is_empty() {
@@ -111,22 +112,28 @@ impl Lexer {
                 }
                 last_seen = v.2;
             }
-            if last_index < v.0 {
-                let chars: Vec<char> = chars[last_index as usize..v.0 as usize].to_vec();
+            let start = utf16_to_char_index(v.0, &utf16_to_char_map)?;
+            let end = utf16_to_char_index(v.1, &utf16_to_char_map)?;
+            if end < start {
+                return Err(anyhow::anyhow!("wrong seg, end before start: {} < {}", end, start));
+            }
+
+            if last_index < start {
+                let chars: Vec<char> = chars[last_index..start].to_vec();
                 let s: String = chars.iter().collect();
                 current.push((s, false)); // spaces
             }
             let words = get_string(
                 &chars,
-                v.0 as usize,
-                v.1 as usize,
+                start,
+                end,
                 &self.additional_split,
                 url_placeholder,
             );
             for w in words {
                 current.push((w, true)); // words
             }
-            last_index = v.1
+            last_index = end
         }
         if !current.is_empty() {
             res.push(current);
@@ -142,6 +149,34 @@ fn init_splitters() -> HashSet<char> {
     res.remove(&'.'); // do not split on dots
     res.shrink_to_fit();
     res
+}
+
+fn build_utf16_to_char_map(text: &str) -> Vec<usize> {
+    let mut map = Vec::with_capacity(text.encode_utf16().count() + 1);
+    let mut char_index = 0;
+    for ch in text.chars() {
+        for _ in 0..ch.len_utf16() {
+            map.push(char_index);
+        }
+        char_index += 1;
+    }
+    map.push(char_index);
+    map
+}
+
+fn utf16_to_char_index(offset: i32, utf16_to_char_map: &[usize]) -> anyhow::Result<usize> {
+    if offset < 0 {
+        return Err(anyhow::anyhow!("wrong seg, negative offset: {}", offset));
+    }
+    let offset = offset as usize;
+    if offset >= utf16_to_char_map.len() {
+        return Err(anyhow::anyhow!(
+            "wrong seg, utf16 offset out of bounds: {} >= {}",
+            offset,
+            utf16_to_char_map.len()
+        ));
+    }
+    Ok(utf16_to_char_map[offset])
 }
 
 fn get_string(
@@ -350,4 +385,41 @@ mod tests {
         with_url: "olia__URL_", vec!["olia".to_string(), "_".to_string(), "_URL_".to_string()],
         with_url_and_more: "olia__URL_oho", vec!["olia".to_string(), "_".to_string(), "_URL_".to_string(), "oho".to_string()],
     );
+
+    #[test]
+    fn utf16_map_handles_surrogate_pairs() {
+        let map = build_utf16_to_char_map("a🡻b");
+
+        assert_eq!(utf16_to_char_index(0, &map).unwrap(), 0);
+        assert_eq!(utf16_to_char_index(1, &map).unwrap(), 1);
+        assert_eq!(utf16_to_char_index(2, &map).unwrap(), 1);
+        assert_eq!(utf16_to_char_index(3, &map).unwrap(), 2);
+        assert_eq!(utf16_to_char_index(4, &map).unwrap(), 3);
+    }
+
+    #[test]
+    fn utf16_map_rejects_out_of_bounds() {
+        let map = build_utf16_to_char_map("a🡻b");
+        assert!(utf16_to_char_index(5, &map).is_err());
+    }
+
+    #[test]
+    fn convert_uses_utf16_offsets() {
+        let lexer = Lexer::new("http://localhost:0").unwrap();
+        let response = LexResponse {
+            seg: vec![vec![1, 2], vec![3, 1]],
+            s: vec![vec![0, 4]],
+        };
+
+        let result = lexer.convert(response, "a🡻b", URL_PLACEHOLDER).unwrap();
+
+        assert_eq!(
+            result,
+            vec![vec![
+                ("a".to_string(), false),
+                ("🡻".to_string(), true),
+                ("b".to_string(), true)
+            ]]
+        );
+    }
 }
